@@ -322,40 +322,53 @@ function RandomCombinationGenerator.createTabContent()
     local frame = CreateFrame("Frame")
     frame:SetSize(560, 400)
 
+    -- CONTENEDOR CENTRAL
+    local mainContainer = CreateFrame("Frame", nil, frame)
+    mainContainer:SetSize(560, 400)
+    mainContainer:SetPoint("CENTER", frame, "CENTER", 0, 0)
+
     -- Título principal
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = mainContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -20)
     title:SetText("Generador de Combinaciones Aleatorias")
     title:SetTextColor(1, 0.82, 0)
 
     -- Descripción
-    local description = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local description = mainContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     description:SetPoint("TOP", title, "BOTTOM", 0, -10)
     description:SetText("Genera combinaciones aleatorias de clase/especialización/facción para nuevos personajes")
 
-    -- Frame para el resultado
-    local resultFrame = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
+    -- Frame para el resultado (también dentro del contenedor)
+    local resultFrame = CreateFrame("Frame", nil, mainContainer, "InsetFrameTemplate")
     resultFrame:SetPoint("TOP", description, "BOTTOM", 0, -20)
     resultFrame:SetSize(500, 180)
 
-    -- Icono de especialización grande
-    local specIcon = resultFrame:CreateTexture(nil, "ARTWORK")
-    specIcon:SetSize(64, 64)
-    specIcon:SetPoint("LEFT", resultFrame, "LEFT", 20, 20)
-    specIcon:SetTexture(134400) -- Icono por defecto
+    -- NUEVO: Contenedor para iconos y textos, para centrar todo el conjunto
+    local resultContainer = CreateFrame("Frame", nil, resultFrame)
+    resultContainer:SetSize(400, 64)
+    resultContainer:SetPoint("CENTER", resultFrame, "CENTER", 0, 0)
 
-    -- Icono de facción
-    local factionIcon = resultFrame:CreateTexture(nil, "ARTWORK")
-    factionIcon:SetSize(32, 32)
-    factionIcon:SetPoint("TOPRIGHT", resultFrame, "TOPRIGHT", -20, -20)
+    -- Icono de facción (ahora a la IZQUIERDA)
+    local factionIcon = resultContainer:CreateTexture(nil, "ARTWORK")
+    factionIcon:SetSize(48, 48)
+    factionIcon:SetPoint("LEFT", resultContainer, "LEFT", 80, 0)
     factionIcon:SetTexture(2173919) -- Icono Alianza por defecto
 
-    -- Texto del resultado (reposicionado)
-    local resultText = resultFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    -- Icono de especialización (ahora a la derecha del de facción)
+    local specIcon = resultContainer:CreateTexture(nil, "ARTWORK")
+    specIcon:SetSize(48, 48)
+    specIcon:SetPoint("LEFT", factionIcon, "RIGHT", 10, 0)
+    specIcon:SetTexture(134400) -- Icono por defecto
+
+    -- Texto del resultado (ahora a la derecha del icono de especialización)
+    local resultText = resultContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     resultText:SetPoint("LEFT", specIcon, "RIGHT", 20, 0)
-    resultText:SetWidth(350)
+    resultText:SetWidth(270)
     resultText:SetJustifyH("LEFT")
     resultText:SetText("Presiona 'Generar' para obtener una combinación")
+
+    -- Centrar el conjunto visualmente en el frame de resultado
+    -- (el propio resultContainer ya está centrado, solo ajustar tamaños si es necesario)
 
     -- Función para actualizar el resultado
     local function UpdateResult()
@@ -403,35 +416,45 @@ function RandomCombinationGenerator.createTabContent()
         end
     end
 
-    -- Botón principal de generar (fila superior) - DOBLE DE ALTO Y TRIPLE DE LARGO
+    -- Botón principal de generar (sin cambios)
     local generateButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    generateButton:SetSize(360, 60) -- Triple de largo (120x3) y doble de alto (30x2)
+    generateButton:SetSize(360, 60)
     generateButton:SetPoint("TOP", resultFrame, "BOTTOM", 0, -20)
     generateButton:SetText("Generar")
     generateButton:SetScript("OnClick", UpdateResult)
-
-    -- Configurar fuente más grande para el botón principal
     local generateButtonText = generateButton:GetFontString()
     generateButtonText:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
 
-    -- Fila inferior de botones - mantener tamaño actual (150x30)
-    -- Botón de configuración (izquierda en fila inferior)
+    -- Crear fila inferior de botones (bien alineados)
+    local buttonWidth, buttonHeight = 150, 30
+
+    -- Botón Configurar Pesos (izquierda)
     local configButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    configButton:SetSize(150, 30)
-    configButton:SetPoint("TOPLEFT", generateButton, "BOTTOMLEFT", 0, -15)
+    configButton:SetSize(buttonWidth, buttonHeight)
+    configButton:SetPoint("TOPLEFT", generateButton, "BOTTOMLEFT", -50, -15)
     configButton:SetText("Configurar Pesos")
     configButton:SetScript("OnClick", function()
         RandomCombinationGenerator.ShowConfigWindow()
     end)
 
-    -- Botón de prueba de probabilidades (derecha en fila inferior)
+    -- Botón Resumen de Pesos (centro)
+    local summaryButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    summaryButton:SetSize(buttonWidth, buttonHeight)
+    summaryButton:SetPoint("TOP", generateButton, "BOTTOM", 0, -15)
+    summaryButton:SetText("Resumen de Pesos")
+    summaryButton:SetScript("OnClick", function()
+        RandomCombinationGenerator.ShowSummaryWindow()
+    end)
+
+    -- Botón Probar Probabilidades (derecha)
     local testButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    testButton:SetSize(150, 30)
-    testButton:SetPoint("TOPRIGHT", generateButton, "BOTTOMRIGHT", 0, -15)
+    testButton:SetSize(buttonWidth, buttonHeight)
+    testButton:SetPoint("TOPRIGHT", generateButton, "BOTTOMRIGHT", 50, -15)
     testButton:SetText("Probar Probabilidades")
     testButton:SetScript("OnClick", function()
         RandomCombinationGenerator.ShowTestWindow()
     end)
+
 
     -- Mostrar último resultado si existe
     local lastResult = ProdigyUtils.db.randomCombination.lastResult
@@ -712,7 +735,7 @@ function RandomCombinationGenerator.ShowConfigWindow()
     local description = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", mainTitle, "BOTTOMLEFT", 0, -10)
     description:SetText(
-    "Habilitar o deshabilitar clases afecta la generación, no el estado de sus especializaciones. Peso menor = mayor probabilidad. Puedes usar decimales (ej: 1.5, 2.3). Peso 1 = máxima probabilidad.")
+        "Habilitar o deshabilitar clases afecta la generación, no el estado de sus especializaciones. Peso menor = mayor probabilidad. Puedes usar decimales (ej: 1.5, 2.3). Peso 1 = máxima probabilidad.")
     description:SetTextColor(0.8, 0.8, 0.8)
 
     local yOffset = -60
@@ -1110,6 +1133,107 @@ function RandomCombinationGenerator.ShowTestWindow()
     end)
 
     testFrame:Show()
+end
+
+-- Función para mostrar la ventana de resumen (ventana modal, siempre en primer plano)
+function RandomCombinationGenerator.ShowSummaryWindow()
+    if RandomCombinationGenerator.summaryFrame and RandomCombinationGenerator.summaryFrame:IsShown() then
+        RandomCombinationGenerator.summaryFrame:Hide()
+        return
+    end
+
+    -- Crear la ventana como hija de UIParent y llevarla al frente con FrameStrataManager
+    local summaryFrame = CreateFrame("Frame", "ProdigySummaryFrame", UIParent, "BasicFrameTemplateWithInset")
+    summaryFrame:SetSize(520, 400)
+    summaryFrame:SetPoint("CENTER")
+
+    -- USAR EL SISTEMA DE ESTRATOS DEL ADDON PARA QUE SIEMPRE QUEDE ENCIMA
+    if ProdigyUtils.FrameStrataManager and ProdigyUtils.FrameStrataManager.BringToFront then
+        ProdigyUtils.FrameStrataManager:BringToFront(summaryFrame)
+    else
+        summaryFrame:SetFrameStrata("TOOLTIP")
+        summaryFrame:SetFrameLevel(99)
+    end
+
+    summaryFrame:SetMovable(true)
+    summaryFrame:EnableMouse(true)
+    summaryFrame:RegisterForDrag("LeftButton")
+    summaryFrame:SetScript("OnDragStart", summaryFrame.StartMoving)
+    summaryFrame:SetScript("OnDragStop", summaryFrame.StopMovingOrSizing)
+
+    summaryFrame.title = summaryFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    summaryFrame.title:SetPoint("TOP", 0, -8)
+    summaryFrame.title:SetText("Resumen de Pesos por Especialización")
+
+    -- Botón de cerrar
+    local closeButton = CreateFrame("Button", nil, summaryFrame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", summaryFrame, "TOPRIGHT", -2, -2)
+
+    -- Scroll para el contenido
+    local scrollFrame = CreateFrame("ScrollFrame", nil, summaryFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 15, -35)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 15)
+
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetSize(480, 800)
+    scrollFrame:SetScrollChild(content)
+
+    -- Mostrar TODAS las especializaciones, agrupadas por peso
+    local groupedByWeight = {}
+    for class, classData in pairs(classSpecData) do
+        for _, spec in ipairs(classData.specs) do
+            local key = class .. "_" .. spec.name
+            local config = ProdigyUtils.db.randomCombination.specs and ProdigyUtils.db.randomCombination.specs[key]
+            local weight = (config and tonumber(config.weight)) or 1
+            if not groupedByWeight[weight] then groupedByWeight[weight] = {} end
+            table.insert(groupedByWeight[weight], {
+                class = class,
+                classColor = classColors and classColors[class] or "|cffffffff",
+                specName = spec.name,
+                icon = spec.icon
+            })
+        end
+    end
+
+    -- Ordenar pesos de menor a mayor
+    local weights = {}
+    for w in pairs(groupedByWeight) do table.insert(weights, w) end
+    table.sort(weights, function(a, b) return a < b end)
+
+    -- Mostrar en el frame
+    local yOffset = -10
+    for _, weight in ipairs(weights) do
+        local specs = groupedByWeight[weight]
+        -- Título de grupo de peso
+        local groupTitle = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        groupTitle:SetPoint("TOPLEFT", 10, yOffset)
+        groupTitle:SetText(string.format("Peso %s:", tostring(weight)))
+        yOffset = yOffset - 22
+
+        for _, entry in ipairs(specs) do
+            -- Icono (usando el campo correcto)
+            local icon = content:CreateTexture(nil, "ARTWORK")
+            icon:SetSize(24, 24)
+            icon:SetPoint("TOPLEFT", 25, yOffset)
+            icon:SetTexture(entry.icon or 134400)
+
+            -- Clase (con color)
+            local classNameText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            classNameText:SetPoint("LEFT", icon, "RIGHT", 8, 0)
+            classNameText:SetText(entry.classColor .. entry.class .. "|r")
+
+            -- Especialización
+            local specText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            specText:SetPoint("LEFT", classNameText, "RIGHT", 12, 0)
+            specText:SetText("- " .. entry.specName)
+
+            yOffset = yOffset - 28
+        end
+        yOffset = yOffset - 10
+    end
+
+    RandomCombinationGenerator.summaryFrame = summaryFrame
+    summaryFrame:Show()
 end
 
 -- Inicializar configuración por defecto al cargar el módulo
