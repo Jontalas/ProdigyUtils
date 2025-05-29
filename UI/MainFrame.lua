@@ -9,7 +9,7 @@ function ProdigyUtils:InitializeUI()
     mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
     mainFrame:SetClampedToScreen(true)
     
-    -- MODIFICADO: Usar el sistema de estratos
+    -- Usar el sistema de estratos
     local strata, level = ProdigyUtils.FrameStrataManager:GetMainWindowStrata()
     mainFrame:SetFrameStrata(strata)
     mainFrame:SetFrameLevel(level)
@@ -47,8 +47,8 @@ function ProdigyUtils:InitializeUI()
     mainFrame:ClearAllPoints()
     mainFrame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
     
-    -- Aplicar opacidad guardada
-    mainFrame:SetAlpha(self.db.windowOpacity)
+    -- ELIMINADO: Ya no aplicamos opacidad guardada
+    -- mainFrame:SetAlpha(self.db.windowOpacity)
     
     -- Mostrar si estaba abierta
     if pos.shown then
@@ -65,7 +65,7 @@ function ProdigyUtils:InitializeUI()
     end)
     mainFrame:SetPropagateKeyboardInput(true)
     
-    -- MODIFICADO: Asegurar que siempre esté al frente cuando se muestre
+    -- Asegurar que siempre esté al frente cuando se muestre
     mainFrame:SetScript("OnShow", function(self)
         if ProdigyUtils.db.alwaysOnTop ~= false then
             ProdigyUtils.FrameStrataManager:BringToFront(self)
@@ -82,7 +82,6 @@ function ProdigyUtils:InitializeUI()
     ProdigyUtils:Debug("Ventana principal inicializada con estrato " .. strata)
 end
 
--- Resto de las funciones sin cambios...
 function ProdigyUtils:InitializeTabs()
     -- PRIMERO: Cargar módulos registrados
     for name, moduleData in pairs(self.modules) do
@@ -99,11 +98,12 @@ function ProdigyUtils:InitializeTabs()
     ProdigyUtils:Debug("Sistema de pestañas inicializado con " .. #ProdigyUtils.TabSystem.tabs .. " pestañas")
 end
 
+-- MEJORADO: Tab de configuración SIN slider de opacidad
 function ProdigyUtils:CreateConfigTab()
     local frame = CreateFrame("ScrollFrame", nil, nil, "UIPanelScrollFrameTemplate")
     frame.content = CreateFrame("Frame", nil, frame)
     frame:SetScrollChild(frame.content)
-    frame.content:SetSize(550, 600)
+    frame.content:SetSize(550, 400)  -- Reducido el tamaño ya que hay menos contenido
     
     -- Título de la sección
     local title = frame.content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -124,7 +124,7 @@ function ProdigyUtils:CreateConfigTab()
         end
     end)
     
-    -- MODIFICADO: Checkbox para mantener siempre al frente
+    -- Checkbox para mantener siempre al frente
     local alwaysOnTopCheckbox = CreateFrame("CheckButton", nil, frame.content, "InterfaceOptionsCheckButtonTemplate")
     alwaysOnTopCheckbox:SetPoint("TOPLEFT", debugCheckbox, "BOTTOMLEFT", 0, -10)
     alwaysOnTopCheckbox.Text:SetText("Mantener ventanas siempre al frente")
@@ -140,37 +140,25 @@ function ProdigyUtils:CreateConfigTab()
         end
     end)
     
-    -- Slider para opacidad de la ventana
-    local opacitySlider = CreateFrame("Slider", nil, frame.content, "OptionsSliderTemplate")
-    opacitySlider:SetPoint("TOPLEFT", alwaysOnTopCheckbox, "BOTTOMLEFT", 0, -30)
-    opacitySlider:SetMinMaxValues(0.3, 1.0)
-    opacitySlider:SetValue(ProdigyUtils.db.windowOpacity or 1.0)
-    opacitySlider:SetValueStep(0.1)
-    opacitySlider:SetObeyStepOnDrag(true)
-    opacitySlider.textLow = opacitySlider:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    opacitySlider.textHigh = opacitySlider:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    opacitySlider.textLow:SetPoint("TOPLEFT", opacitySlider, "BOTTOMLEFT", 2, 3)
-    opacitySlider.textHigh:SetPoint("TOPRIGHT", opacitySlider, "BOTTOMRIGHT", -2, 3)
-    opacitySlider.textLow:SetText("30%")
-    opacitySlider.textHigh:SetText("100%")
+    -- ELIMINADO COMPLETAMENTE: Slider de opacidad y toda su funcionalidad
     
-    local opacityTitle = frame.content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    opacityTitle:SetPoint("BOTTOMLEFT", opacitySlider, "TOPLEFT", 0, 0)
-    opacityTitle:SetText("Opacidad de la ventana: " .. math.floor((ProdigyUtils.db.windowOpacity or 1.0) * 100) .. "%")
-    
-    opacitySlider:SetScript("OnValueChanged", function(self, value)
-        ProdigyUtils.db.windowOpacity = value
-        ProdigyUtils.mainFrame:SetAlpha(value)
-        opacityTitle:SetText("Opacidad de la ventana: " .. math.floor(value * 100) .. "%")
-    end)
+    -- NUEVO: Información del sistema de estratos para debug
+    local strataInfo = frame.content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    strataInfo:SetPoint("TOPLEFT", alwaysOnTopCheckbox, "BOTTOMLEFT", 0, -30)
+    strataInfo:SetText("Sistema de Gestión de Ventanas: Activo")
+    strataInfo:SetTextColor(0.7, 0.7, 0.7)
     
     -- Función llamada cuando se activa la pestaña
     function frame:OnTabActivated()
         debugCheckbox:SetChecked(ProdigyUtils.db.showDebug or false)
         alwaysOnTopCheckbox:SetChecked(ProdigyUtils.db.alwaysOnTop ~= false)
-        local opacity = ProdigyUtils.db.windowOpacity or 1.0
-        opacitySlider:SetValue(opacity)
-        ProdigyUtils.mainFrame:SetAlpha(opacity)
+        
+        -- Actualizar información del sistema de estratos
+        if ProdigyUtils.db.showDebug then
+            local stats = ProdigyUtils.FrameStrataManager:GetStats()
+            strataInfo:SetText(string.format("Estrato actual: %s (Nivel: %d)", 
+                stats.currentStrata, stats.currentLevel))
+        end
     end
     
     return frame

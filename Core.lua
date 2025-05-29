@@ -15,28 +15,35 @@ local defaultSettings = {
     },
     modules = {},
     showDebug = false,
-    windowOpacity = 1.0,
-    alwaysOnTop = true  -- Por defecto la ventana estará siempre al frente
+    alwaysOnTop = true
 }
 
 -- Frame principal para eventos
 local eventFrame = CreateFrame("Frame")
 
+-- MEJORADO: Función recursiva optimizada para merge de configuración
+local function deepMergeConfig(target, source)
+    for key, value in pairs(source) do
+        if target[key] == nil then
+            if type(value) == "table" then
+                target[key] = {}
+                deepMergeConfig(target[key], value)
+            else
+                target[key] = value
+            end
+        elseif type(value) == "table" and type(target[key]) == "table" then
+            deepMergeConfig(target[key], value)
+        end
+    end
+end
+
 local function OnAddonLoaded(self, event, addonName)
     if addonName == "ProdigyUtils" then
-        -- Inicializar base de datos con merge de configuración
+        -- MEJORADO: Inicializar base de datos con merge optimizado
         ProdigyUtilsDB = ProdigyUtilsDB or {}
         
-        -- Merge configuración por defecto con guardada
-        for key, value in pairs(defaultSettings) do
-            if ProdigyUtilsDB[key] == nil then
-                if type(value) == "table" then
-                    ProdigyUtilsDB[key] = CopyTable(value)
-                else
-                    ProdigyUtilsDB[key] = value
-                end
-            end
-        end
+        -- Merge configuración por defecto con guardada (más eficiente)
+        deepMergeConfig(ProdigyUtilsDB, defaultSettings)
         
         ProdigyUtils.db = ProdigyUtilsDB
         

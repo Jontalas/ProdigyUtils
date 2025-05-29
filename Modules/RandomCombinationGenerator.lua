@@ -622,34 +622,6 @@ local function CreateCustomDropdown(parent, width, x, y)
     return dropdown
 end
 
--- NUEVO: Función para habilitar/deshabilitar especializaciones de una clase
-local function SetClassSpecsEnabled(className, enabled, controls, pendingChanges)
-    local classData = classSpecData[className]
-    if not classData then return end
-    
-    for _, spec in ipairs(classData.specs) do
-        local specKey = className .. "_" .. spec.name
-        
-        -- Actualizar checkbox visual
-        if controls[specKey] and controls[specKey].enabledCheckbox then
-            controls[specKey].enabledCheckbox:SetChecked(enabled)
-            
-            -- Cambiar opacity para indicar estado
-            local alpha = enabled and 1.0 or 0.5
-            if controls[specKey].enabledCheckbox then
-                controls[specKey].enabledCheckbox:SetAlpha(alpha)
-            end
-            if controls[specKey].weightEditBox then
-                controls[specKey].weightEditBox:SetAlpha(alpha)
-            end
-        end
-        
-        -- Marcar cambio pendiente
-        pendingChanges[specKey] = pendingChanges[specKey] or {}
-        pendingChanges[specKey].enabled = enabled
-    end
-end
-
 -- Función para ajustar la opacidad de una clase
 local function SetClassOpacity(className, enabled, controls)
     local alpha = enabled and 1.0 or 0.5 -- 100% opacidad si está habilitada, 50% si está deshabilitada
