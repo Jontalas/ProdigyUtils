@@ -129,20 +129,26 @@ end
 
 function CharactersTab.createTabContent()
     local frame = CreateFrame("Frame")
-    frame:SetSize(900, 420) -- Más ancho por la nueva columna
+    frame:SetSize(900, 420) -- tamaño total de la pestaña principal
 
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", 0, -20)
+    -- 1. Frame contenedor centrado
+    local containerFrame = CreateFrame("Frame", nil, frame)
+    containerFrame:SetSize(850, 380) -- ajusta el tamaño para que quepan título y tabla
+    containerFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
+
+    -- 2. Título alineado al contenedor
+    local title = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 280, -20)
     title:SetText("Personajes de la cuenta")
     title:SetTextColor(1, 0.82, 0)
 
     local headers = { "Nombre", "Clase", "Max ilvl", "Especializaciones" }
-    local COLUMN_X = { 20, 120, 230, 320 } -- ajusta el ancho según lo necesites
+    local COLUMN_X = { 120, 220, 330, 420 } -- igual que antes, pero relativos al containerFrame
 
     for i, header in ipairs(headers) do
-        local headerFS = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local headerFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         headerFS:SetPoint("TOPLEFT", COLUMN_X[i], -60)
-        headerFS:SetWidth((i == 3) and 550 or 100) -- Especializaciones más ancho
+        headerFS:SetWidth((i == 4) and 500 or 100)
         headerFS:SetJustifyH("LEFT")
         headerFS:SetText(header)
     end
@@ -150,30 +156,25 @@ function CharactersTab.createTabContent()
     local yOffset = -90
     local rowHeight = 18
 
-    -- Obtener y ordenar personajes por ilvl máximo
     local chars = GetAllCharacters()
     for _, charData in ipairs(chars) do
         charData.maxIlvl = GetMaxIlvl(charData)
     end
     table.sort(chars, function(a, b) return (a.maxIlvl or 0) > (b.maxIlvl or 0) end)
 
-
     for _, charData in ipairs(chars) do
-        -- Nombre
-        local nameFS = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local nameFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         nameFS:SetPoint("TOPLEFT", COLUMN_X[1], yOffset)
         nameFS:SetWidth(90)
         nameFS:SetJustifyH("LEFT")
         nameFS:SetText(GetFactionColor(charData.faction) .. charData.name .. "|r")
 
-        -- Clase
-        local classFS = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local classFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         classFS:SetPoint("TOPLEFT", COLUMN_X[2], yOffset)
         classFS:SetWidth(90)
         classFS:SetJustifyH("LEFT")
         classFS:SetText(GetClassColor(charData.class) .. charData.class .. "|r")
 
-        -- Calculo de max ilvl y especializaciones
         local especStr = ""
         local maxIlvl = 0
         local maxIndex = 1
@@ -185,14 +186,12 @@ function CharactersTab.createTabContent()
             end
         end
 
-        -- Max ilvl (en verde) - ahora columna 3
-        local maxIlvlFS = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local maxIlvlFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         maxIlvlFS:SetPoint("TOPLEFT", COLUMN_X[3], yOffset)
         maxIlvlFS:SetWidth(60)
         maxIlvlFS:SetJustifyH("LEFT")
         maxIlvlFS:SetText("|cff00ff00" .. (maxIlvl > 0 and string.format("%.1f", maxIlvl) or "") .. "|r")
 
-        -- Especializaciones - ahora columna 4
         for i = 1, 4 do
             local specName = GetSpecName(charData, i)
             local ilvl = tonumber(GetSpecIlvl(charData, i)) or 0
@@ -203,9 +202,9 @@ function CharactersTab.createTabContent()
             end
         end
 
-        local especFS = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local especFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         especFS:SetPoint("TOPLEFT", COLUMN_X[4], yOffset)
-        especFS:SetWidth(500)
+        especFS:SetWidth(300)
         especFS:SetJustifyH("LEFT")
         especFS:SetText(especStr)
 
