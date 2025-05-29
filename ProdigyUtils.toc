@@ -1,0 +1,13 @@
+## Interface: 110105
+## Title: Prodigy Utils
+## Notes: Addon multi-utilidad con sistema de pestañas
+## Author: Jontalas
+## Version: 1.0.0
+## SavedVariables: ProdigyUtilsDB
+## IconTexture: Interface\Icons\INV_Misc_Gear_01
+
+Core.lua
+Utils/FrameStrataManager.lua
+UI/MainFrame.lua
+UI/TabSystem.lua
+Modules/RandomCombinationGenerator.lua

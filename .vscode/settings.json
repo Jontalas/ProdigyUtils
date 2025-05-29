@@ -1,0 +1,7 @@
+{
+    "Lua.diagnostics.globals": [
+        "CreateFrame",
+        "SlashCmdList",
+        "UIParent"
+    ]
+}
