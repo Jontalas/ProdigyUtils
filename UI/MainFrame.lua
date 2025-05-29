@@ -16,7 +16,7 @@ function ProdigyUtils:InitializeUI()
 
     -- Hacer redimensionable (método correcto)
     mainFrame:SetResizable(true)
-    mainFrame:SetResizeBounds(800, 500, 1200, 800)
+    mainFrame:SetResizeBounds(900, 500, 1200, 800)
 
     -- Botón de redimensionar
     local resizeButton = CreateFrame("Button", nil, mainFrame)

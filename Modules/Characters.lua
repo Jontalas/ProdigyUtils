@@ -131,29 +131,39 @@ function CharactersTab.createTabContent()
     local frame = CreateFrame("Frame")
     frame:SetSize(900, 420) -- tamaño total de la pestaña principal
 
-    -- 1. Frame contenedor centrado
+    -- Frame contenedor centrado
     local containerFrame = CreateFrame("Frame", nil, frame)
-    containerFrame:SetSize(850, 380) -- ajusta el tamaño para que quepan título y tabla
+    containerFrame:SetSize(800, 380)
     containerFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
 
-    -- 2. Título alineado al contenedor
+    -- ScrollFrame para la tabla
+    local scrollFrame = CreateFrame("ScrollFrame", nil, containerFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 0, -60)
+    scrollFrame:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    -- Contenido del scroll (child)
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(850, 1) -- el height se actualizará según el contenido
+    scrollFrame:SetScrollChild(scrollChild)
+
+    -- Título alineado al contenedor
     local title = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 280, -20)
+    title:SetPoint("TOP", 0, -20)
     title:SetText("Personajes de la cuenta")
     title:SetTextColor(1, 0.82, 0)
 
     local headers = { "Nombre", "Clase", "Max ilvl", "Especializaciones" }
-    local COLUMN_X = { 120, 220, 330, 420 } -- igual que antes, pero relativos al containerFrame
+    local COLUMN_X = { 80, 180, 290, 380 }
 
     for i, header in ipairs(headers) do
-        local headerFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        headerFS:SetPoint("TOPLEFT", COLUMN_X[i], -60)
+        local headerFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        headerFS:SetPoint("TOPLEFT", COLUMN_X[i], 0)
         headerFS:SetWidth((i == 4) and 500 or 100)
         headerFS:SetJustifyH("LEFT")
         headerFS:SetText(header)
     end
 
-    local yOffset = -90
+    local yOffset = -30
     local rowHeight = 18
 
     local chars = GetAllCharacters()
@@ -163,13 +173,13 @@ function CharactersTab.createTabContent()
     table.sort(chars, function(a, b) return (a.maxIlvl or 0) > (b.maxIlvl or 0) end)
 
     for _, charData in ipairs(chars) do
-        local nameFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local nameFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         nameFS:SetPoint("TOPLEFT", COLUMN_X[1], yOffset)
         nameFS:SetWidth(90)
         nameFS:SetJustifyH("LEFT")
         nameFS:SetText(GetFactionColor(charData.faction) .. charData.name .. "|r")
 
-        local classFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local classFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         classFS:SetPoint("TOPLEFT", COLUMN_X[2], yOffset)
         classFS:SetWidth(90)
         classFS:SetJustifyH("LEFT")
@@ -186,7 +196,7 @@ function CharactersTab.createTabContent()
             end
         end
 
-        local maxIlvlFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local maxIlvlFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         maxIlvlFS:SetPoint("TOPLEFT", COLUMN_X[3], yOffset)
         maxIlvlFS:SetWidth(60)
         maxIlvlFS:SetJustifyH("LEFT")
@@ -202,7 +212,7 @@ function CharactersTab.createTabContent()
             end
         end
 
-        local especFS = containerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local especFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         especFS:SetPoint("TOPLEFT", COLUMN_X[4], yOffset)
         especFS:SetWidth(300)
         especFS:SetJustifyH("LEFT")
@@ -210,6 +220,9 @@ function CharactersTab.createTabContent()
 
         yOffset = yOffset - rowHeight
     end
+
+    -- Ajustar el alto del scrollChild según filas
+    scrollChild:SetHeight(-yOffset + 10)
 
     return frame
 end
