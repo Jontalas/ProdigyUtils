@@ -57,19 +57,14 @@ end
 function TabSystem:SwitchToTab(tabName)
     for _, tab in ipairs(self.tabs) do
         if tab.name == tabName then
-            -- Activar pestaña
             tab.container:Show()
-            tab.button:SetEnabled(false) -- Deshabilitar botón activo
-            self.activeTab = tab
-            
-            -- Ejecutar callback de activación si existe
-            if tab.contentFrame and tab.contentFrame.OnTabActivated then
-                tab.contentFrame:OnTabActivated()
+            -- REFRESCO DINÁMICO:
+            if ProdigyUtils.modules[tab.name] and ProdigyUtils.modules[tab.name].refreshTabContent then
+                ProdigyUtils.modules[tab.name].refreshTabContent(tab.container)
             end
+            self.activeTab = tab
         else
-            -- Desactivar otras pestañas
             tab.container:Hide()
-            tab.button:SetEnabled(true)
         end
     end
 end

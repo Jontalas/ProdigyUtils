@@ -11,3 +11,4 @@ Utils/FrameStrataManager.lua
 UI/MainFrame.lua
 UI/TabSystem.lua
 Modules/RandomCombinationGenerator.lua
+Modules/Characters.lua
