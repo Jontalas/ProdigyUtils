@@ -203,18 +203,23 @@ local function InitializeDefaultSettings()
 end
 
 -- Función para calcular probabilidades considerando clases habilitadas
-local function CalculateWeightedProbabilities()
+local function CalculateWeightedProbabilities(mode)
     local enabledSpecs = {}
     local weights = {}
 
     for specKey, specConfig in pairs(ProdigyUtils.db.randomCombination.specs) do
-        -- Verificar si la clase está habilitada SIN cambiar el estado de sus especializaciones
-        local classEnabled = ProdigyUtils.db.randomCombination.classEnabled[specConfig.class] -- Solo se usa como filtro
-        if classEnabled and specConfig.enabled then
-            -- Verificar facción a nivel de clase
-            local classFaction = ProdigyUtils.db.randomCombination.classFactions[specConfig.class] or "both"
+        local classEnabled = ProdigyUtils.db.randomCombination.classEnabled[specConfig.class]
+        local include = false
 
-            -- Solo incluir si la clase tiene al menos una facción disponible
+        if mode == "inverse" then
+            include = (specConfig.enabled == false)
+            -- Ignora el checkbox de la clase
+        else
+            include = (classEnabled and specConfig.enabled)
+        end
+
+        if include then
+            local classFaction = ProdigyUtils.db.randomCombination.classFactions[specConfig.class] or "both"
             if classFaction ~= "none" then
                 table.insert(enabledSpecs, specConfig)
                 table.insert(weights, specConfig.weight)
@@ -226,7 +231,7 @@ local function CalculateWeightedProbabilities()
         return {}, {}
     end
 
-    -- Convertir pesos a probabilidades (peso menor = mayor probabilidad)
+    -- Pesos y cálculos igual que antes
     local invertedWeights = {}
     for _, weight in ipairs(weights) do
         table.insert(invertedWeights, 1 / weight)
@@ -246,8 +251,8 @@ local function CalculateWeightedProbabilities()
 end
 
 -- Función para generar combinación aleatoria
-local function GenerateRandomCombination()
-    local enabledSpecs, probabilities = CalculateWeightedProbabilities()
+local function GenerateRandomCombination(mode)
+    local enabledSpecs, probabilities = CalculateWeightedProbabilities(mode)
 
     if #enabledSpecs == 0 then
         return nil, "No hay especializaciones habilitadas"
@@ -270,16 +275,26 @@ local function GenerateRandomCombination()
         selectedSpec = enabledSpecs[#enabledSpecs] -- Fallback al último
     end
 
-    -- Obtener facción desde configuración de clase
+    -- Lógica de facciones especial para modo inverso
     local classFaction = ProdigyUtils.db.randomCombination.classFactions[selectedSpec.class] or "both"
     local availableFactions = {}
 
-    if classFaction == "both" then
-        availableFactions = { "Alianza", "Horda" }
-    elseif classFaction == "alliance" then
-        availableFactions = { "Alianza" }
-    elseif classFaction == "horde" then
-        availableFactions = { "Horda" }
+    if mode == "inverse" then
+        if classFaction == "both" then
+            availableFactions = { "Alianza", "Horda" }
+        elseif classFaction == "alliance" then
+            availableFactions = { "Horda" }
+        elseif classFaction == "horde" then
+            availableFactions = { "Alianza" }
+        end
+    else
+        if classFaction == "both" then
+            availableFactions = { "Alianza", "Horda" }
+        elseif classFaction == "alliance" then
+            availableFactions = { "Alianza" }
+        elseif classFaction == "horde" then
+            availableFactions = { "Horda" }
+        end
     end
 
     if #availableFactions == 0 then
@@ -333,14 +348,47 @@ function RandomCombinationGenerator.createTabContent()
     title:SetText("Generador de Combinaciones Aleatorias")
     title:SetTextColor(1, 0.82, 0)
 
-    -- Descripción
-    local description = mainContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    description:SetPoint("TOP", title, "BOTTOM", 0, -10)
-    description:SetText("Genera combinaciones aleatorias de clase/especialización/facción para nuevos personajes")
+    -- MODO DE GENERACIÓN (Dropdown)
+    local modeDropdown = CreateFrame("Frame", nil, mainContainer)
+    modeDropdown:SetSize(170, 25)
+    modeDropdown:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+
+    local modeLabel = modeDropdown:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    modeLabel:SetPoint("LEFT", modeDropdown, "LEFT", 0, 0)
+    modeLabel:SetText("Modo de generación:")
+
+    local dropdown = CreateFrame("Frame", "ProdigyGenModeDropdown", modeDropdown, "UIDropDownMenuTemplate")
+    dropdown:SetPoint("LEFT", modeLabel, "RIGHT", -10, -3)
+    local generationMode = "normal" -- default
+
+    local function OnSelectMode(self, arg1, arg2, checked)
+        generationMode = arg1
+        UIDropDownMenu_SetSelectedID(dropdown, self:GetID())
+    end
+
+    UIDropDownMenu_Initialize(dropdown, function(self, level, menuList)
+        local info = UIDropDownMenu_CreateInfo()
+        info.func = OnSelectMode
+
+        info.text = "Normal"
+        info.arg1 = "normal"
+        info.checked = (generationMode == "normal")
+        UIDropDownMenu_AddButton(info)
+
+        info = UIDropDownMenu_CreateInfo()
+        info.func = OnSelectMode
+        info.text = "Inverso"
+        info.arg1 = "inverse"
+        info.checked = (generationMode == "inverse")
+        UIDropDownMenu_AddButton(info)
+    end)
+
+    UIDropDownMenu_SetWidth(dropdown, 120)
+    UIDropDownMenu_SetSelectedID(dropdown, 1)
 
     -- Frame para el resultado (también dentro del contenedor)
     local resultFrame = CreateFrame("Frame", nil, mainContainer, "InsetFrameTemplate")
-    resultFrame:SetPoint("TOP", description, "BOTTOM", 0, -20)
+    resultFrame:SetPoint("TOP", title, "BOTTOM", 0, -60)
     resultFrame:SetSize(500, 180)
 
     -- NUEVO: Contenedor para iconos y textos, para centrar todo el conjunto
@@ -372,7 +420,7 @@ function RandomCombinationGenerator.createTabContent()
 
     -- Función para actualizar el resultado
     local function UpdateResult()
-        local result, error = GenerateRandomCombination()
+        local result, error = GenerateRandomCombination(generationMode)
 
         if error then
             resultText:SetText("|cffff0000Error: " .. error .. "|r")
@@ -389,14 +437,17 @@ function RandomCombinationGenerator.createTabContent()
             local classColor = classColors[result.class] or "|cffffffff"
 
             -- Formatear resultado SIN facción (ya se muestra el icono)
+            local specKey = result.class .. "_" .. result.spec
+            local specConfig = ProdigyUtils.db.randomCombination.specs[specKey]
+            local weightText = specConfig and specConfig.weight and (" (" .. tostring(specConfig.weight) .. ")") or ""
             local resultString = string.format(
-                "%s%s|r\n%s\n%s",
+                "%s%s|r\n%s%s\n%s",
                 classColor,
                 result.class,
                 result.spec,
+                weightText,
                 result.role
             )
-
             resultText:SetText(resultString)
 
             -- Actualizar iconos
