@@ -6,7 +6,7 @@ local CharactersTab = {}
 -- Colores de clase
 local classColors = {
     ["Caballero de la Muerte"] = "|cffc41e3a",
-    ["Cazador de Demonios"] = "|cffa330c9",
+    ["Cazador de demonios"] = "|cffa330c9",
     ["Druida"] = "|cffff7c0a",
     ["Evocador"] = "|cff33937f",
     ["Cazador"] = "|cffaad372",
@@ -134,7 +134,8 @@ function CharactersTab.createTabContent()
     -- Frame contenedor centrado
     local containerFrame = CreateFrame("Frame", nil, frame)
     containerFrame:SetSize(800, 380)
-    containerFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    containerFrame:SetPoint("TOPLEFT", 30, -30)
+    containerFrame:SetPoint("BOTTOMRIGHT", -30, 30)
 
     -- ScrollFrame para la tabla
     local scrollFrame = CreateFrame("ScrollFrame", nil, containerFrame, "UIPanelScrollFrameTemplate")
@@ -153,11 +154,11 @@ function CharactersTab.createTabContent()
     title:SetTextColor(1, 0.82, 0)
 
     local headers = { "Nombre", "Clase", "Max ilvl", "Especializaciones" }
-    local COLUMN_X = { 80, 180, 290, 380 }
+    local COLUMN_X = { 30, 130, 280, 370 }
 
     for i, header in ipairs(headers) do
         local headerFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        headerFS:SetPoint("TOPLEFT", COLUMN_X[i], 0)
+        headerFS:SetPoint("TOPLEFT", COLUMN_X[i], -5)
         headerFS:SetWidth((i == 4) and 500 or 100)
         headerFS:SetJustifyH("LEFT")
         headerFS:SetText(header)
@@ -181,7 +182,7 @@ function CharactersTab.createTabContent()
 
         local classFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         classFS:SetPoint("TOPLEFT", COLUMN_X[2], yOffset)
-        classFS:SetWidth(90)
+        classFS:SetWidth(150)
         classFS:SetJustifyH("LEFT")
         classFS:SetText(GetClassColor(charData.class) .. charData.class .. "|r")
 
@@ -214,7 +215,7 @@ function CharactersTab.createTabContent()
 
         local especFS = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         especFS:SetPoint("TOPLEFT", COLUMN_X[4], yOffset)
-        especFS:SetWidth(300)
+        especFS:SetWidth(500)
         especFS:SetJustifyH("LEFT")
         especFS:SetText(especStr)
 
