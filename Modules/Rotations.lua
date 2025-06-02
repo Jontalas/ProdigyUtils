@@ -84,9 +84,10 @@ function Rotations.createTabContent()
     abilityTitle:SetText("Selecciona un loadout")
     abilityTitle:SetTextColor(1, 1, 1)
 
+    -- MODIFICADO: ScrollFrame de habilidades con anclaje dinámico como en Characters
     local abilityScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
     abilityScroll:SetPoint("TOPLEFT", 240, -80)
-    abilityScroll:SetSize(300, 320)
+    abilityScroll:SetPoint("BOTTOMRIGHT", -30, 30) -- NUEVO: Anclaje dinámico al tamaño de ventana
     local abilityContent = CreateFrame("Frame", nil, abilityScroll)
     abilityContent:SetSize(300, 600)
     abilityScroll:SetScrollChild(abilityContent)
@@ -124,17 +125,19 @@ function Rotations.createTabContent()
             selectedButton:SetHighlightFontObject("GameFontNormal")
         end
 
-        -- Código existente para mostrar habilidades
+        -- MODIFICADO: Código para mostrar habilidades SIN spellID y con contador en verde
         local abilities = {}
+        -- CAMBIADO: Solo usar el nombre de la habilidad como clave, sin spellID
         for spellID, v in pairs(loadoutData.abilities) do
-            table.insert(abilities, { spellID = spellID, name = v.name, count = v.count })
+            table.insert(abilities, { name = v.name, count = v.count })
         end
         table.sort(abilities, function(a, b) return a.count > b.count end)
         local yy = 0
         for i, ab in ipairs(abilities) do
             local line = abilityContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             line:SetPoint("TOPLEFT", 10, -yy)
-            line:SetText(string.format("%s (ID: %d): %d", ab.name, ab.spellID, ab.count))
+            -- MODIFICADO: Formato sin ID, con contador en verde
+            line:SetText(string.format("%s: |cff00ff00%d|r", ab.name, ab.count))
             yy = yy + 22
         end
         if #abilities == 0 then
@@ -206,6 +209,7 @@ function Rotations.OnLoad()
                     Rotations.UpdateLoadouts()
                 end
                 local abilities = ProdigyUtilsDB.rotations[playerKey][specID][loadoutID].abilities
+                -- MODIFICADO: Seguir usando spellID como clave interna para evitar duplicados de nombres
                 abilities[spellID] = abilities[spellID] or { name = spellName, count = 0 }
                 abilities[spellID].count = abilities[spellID].count + 1
             end
