@@ -5,7 +5,12 @@ local function GetPlayerKey()
 end
 
 local function SafeGetCurrentSpecID()
-    return (PlayerUtil and PlayerUtil.GetCurrentSpecID and PlayerUtil.GetCurrentSpecID()) or nil
+    if not GetSpecialization then return nil end
+    local specIndex = GetSpecialization()
+    if not specIndex or specIndex == 0 then return nil end
+    if not GetSpecializationInfo then return nil end
+    local specID = GetSpecializationInfo(specIndex)
+    return specID
 end
 
 local function EnsureDB()
@@ -61,33 +66,65 @@ function Rotations.createTabContent()
     if not specID then
         local info = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         info:SetPoint("TOPLEFT", 20, -60)
-        info:SetText("No se ha detectado una especialización de talentos disponible para el personaje.\n"
-            .. "Si acabas de iniciar sesión o cambiar de personaje, vuelve a esta pestaña en unos segundos.")
         return frame
     end
 
     local db = (ProdigyUtilsDB.rotations and ProdigyUtilsDB.rotations[playerKey] and ProdigyUtilsDB.rotations[playerKey][specID]) or {}
 
     local loadoutScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
-    loadoutScroll:SetPoint("TOPLEFT", 20, -60)
+    loadoutScroll:SetPoint("TOPLEFT", 20, -80)
     loadoutScroll:SetSize(200, 320)
     local loadoutContent = CreateFrame("Frame", nil, loadoutScroll)
     loadoutContent:SetSize(200, 600)
     loadoutScroll:SetScrollChild(loadoutContent)
 
+    -- NUEVO: Título para la sección de habilidades con el nombre del loadout
+    local abilityTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    abilityTitle:SetPoint("TOP", 0, -40)
+    abilityTitle:SetText("Selecciona un loadout")
+    abilityTitle:SetTextColor(1, 1, 1)
+
     local abilityScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
-    abilityScroll:SetPoint("TOPLEFT", 240, -60)
+    abilityScroll:SetPoint("TOPLEFT", 240, -80)
     abilityScroll:SetSize(300, 320)
     local abilityContent = CreateFrame("Frame", nil, abilityScroll)
     abilityContent:SetSize(300, 600)
     abilityScroll:SetScrollChild(abilityContent)
 
-    local function ShowAbilities(loadoutData)
-        -- Borra todos los hijos previos del abilityContent
+    -- Variable para rastrear el botón actualmente seleccionado
+    local selectedButton = nil
+
+    local function ShowAbilities(loadoutData, loadoutID, clickedButton)
+        -- NUEVO: Limpiar todos los FontStrings previos del abilityContent
+        for _, child in ipairs({abilityContent:GetRegions()}) do
+            if child:GetObjectType() == "FontString" then
+                child:Hide()
+                child:SetParent(nil)
+            end
+        end
+        
+        -- NUEVO: Limpiar todos los frames hijos del abilityContent
         for _, child in ipairs({abilityContent:GetChildren()}) do
             child:Hide()
             child:SetParent(nil)
         end
+
+        -- NUEVO: Actualizar el título con el nombre del loadout seleccionado
+        abilityTitle:SetText(loadoutData.name or "Loadout " .. tostring(loadoutID))
+        abilityTitle:SetTextColor(1, 0.82, 0) -- Color dorado para indicar selección
+
+        -- NUEVO: Gestión de botón seleccionado (highlighting)
+        if selectedButton then
+            selectedButton:SetNormalFontObject("GameFontNormal")
+            selectedButton:SetHighlightFontObject("GameFontHighlight")
+        end
+        selectedButton = clickedButton
+        if selectedButton then
+            selectedButton:SetNormalFontObject("GameFontHighlight")
+            selectedButton:SetHighlightFontObject("GameFontNormal")
+        end
+
+        -- Código existente para mostrar habilidades
         local abilities = {}
         for spellID, v in pairs(loadoutData.abilities) do
             table.insert(abilities, { spellID = spellID, name = v.name, count = v.count })
@@ -114,7 +151,8 @@ function Rotations.createTabContent()
         btn:SetSize(180, 28)
         btn:SetPoint("TOPLEFT", 10, -((n-1)*35))
         btn:SetText((loadoutData.name or "Loadout " .. tostring(loadoutID)))
-        btn:SetScript("OnClick", function() ShowAbilities(loadoutData) end)
+        -- MODIFICADO: Pasar el loadoutID y el botón a la función ShowAbilities
+        btn:SetScript("OnClick", function() ShowAbilities(loadoutData, loadoutID, btn) end)
     end
     if n == 0 then
         local info = loadoutContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -123,6 +161,28 @@ function Rotations.createTabContent()
     end
 
     return frame
+end
+
+-- NUEVA FUNCIONALIDAD: Variable para guardar el frame actual
+local lastFrame = nil
+
+-- NUEVA FUNCIONALIDAD: Función para refrescar el contenido de la pestaña
+function Rotations.refreshTabContent(container)
+    -- Elimina el frame anterior
+    if lastFrame then
+        lastFrame:Hide()
+        lastFrame:SetParent(nil)
+        lastFrame = nil
+    end
+    
+    -- Crear nuevo contenido actualizado
+    local newFrame = Rotations.createTabContent()
+    newFrame:SetParent(container)
+    newFrame:SetAllPoints(container)
+    newFrame:Show()
+    
+    -- Guardar referencia al nuevo frame
+    lastFrame = newFrame
 end
 
 function Rotations.OnLoad()
@@ -154,9 +214,11 @@ function Rotations.OnLoad()
     end
 end
 
+-- MODIFICADO: Registrar el módulo CON la función de refresh
 ProdigyUtils:RegisterModule("rotations", {
     displayName = "Rotaciones",
-    createTabContent = Rotations.createTabContent
+    createTabContent = Rotations.createTabContent,
+    refreshTabContent = Rotations.refreshTabContent  -- ← LÍNEA AGREGADA
 })
 
 Rotations.OnLoad()
