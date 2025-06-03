@@ -13,3 +13,4 @@ UI/TabSystem.lua
 Modules/RandomCombinationGenerator.lua
 Modules/Characters.lua
 Modules/Rotations.lua
+Modules/CharacterProfile.lua

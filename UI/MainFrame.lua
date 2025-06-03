@@ -95,8 +95,12 @@ function ProdigyUtils:InitializeTabs()
     -- PRIMERO: Cargar módulos registrados
     for name, moduleData in pairs(self.modules) do
         if moduleData.createTabContent then
+            local displayName = moduleData.displayName
+            if type(displayName) == "function" then
+                displayName = displayName()
+            end
             local contentFrame = moduleData.createTabContent()
-            ProdigyUtils.TabSystem:CreateTab(name, moduleData.displayName or name, contentFrame)
+            ProdigyUtils.TabSystem:CreateTab(name, displayName or name, contentFrame)
         end
     end
 
