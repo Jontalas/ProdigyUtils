@@ -5,7 +5,8 @@ local CharacterProfile = {}
 local function GetCharacterData()
     local playerName = UnitName("player") or "Desconocido"
     local playerLevel = UnitLevel("player") or 1
-    local playerClass = UnitClass("player") or "Desconocida"
+    local playerClass, englishClass = UnitClass("player")
+    playerClass = playerClass or "Desconocida"
     local playerRace = UnitRace("player") or "Desconocida"
     
     -- Especialización actual
@@ -20,10 +21,10 @@ local function GetCharacterData()
         end
     end
     
-    -- Item Level promedio
-    local avgItemLevel = 0
+    -- Item Level promedio (equipado, un decimal)
+    local ilvl = 0
     if GetAverageItemLevel then
-        avgItemLevel = math.floor(GetAverageItemLevel() or 0)
+        ilvl = tonumber(string.format("%.1f", select(2, GetAverageItemLevel())))
     end
     
     -- Colores de clase
@@ -43,7 +44,6 @@ local function GetCharacterData()
         ["WARRIOR"] = "|cffc69b6d"
     }
     
-    local _, englishClass = UnitClass("player")
     local classColor = classColors[englishClass] or "|cffffffff"
     
     return {
@@ -53,7 +53,7 @@ local function GetCharacterData()
         race = playerRace,
         specName = specName,
         specIcon = specIcon,
-        itemLevel = avgItemLevel,
+        itemLevel = ilvl,
         classColor = classColor
     }
 end
@@ -81,6 +81,12 @@ function CharacterProfile.createTabContent()
     local infoFrame = CreateFrame("Frame", nil, mainContainer, "InsetFrameTemplate")
     infoFrame:SetPoint("TOP", title, "BOTTOM", 0, -20)
     infoFrame:SetSize(520, 320)
+
+    -- Retrato 2D del personaje en la esquina superior derecha
+    local portrait = infoFrame:CreateTexture(nil, "BACKGROUND")
+    portrait:SetSize(64, 64)
+    portrait:SetPoint("TOPRIGHT", infoFrame, "TOPRIGHT", -12, -12)
+    SetPortraitTexture(portrait, "player")
     
     -- CONTENEDOR DE INFORMACIÓN CENTRADO
     local infoContainer = CreateFrame("Frame", nil, infoFrame)
@@ -149,16 +155,7 @@ function CharacterProfile.createTabContent()
     ilvlValue:SetPoint("LEFT", ilvlLabel, "RIGHT", 10, 0)
     
     -- Color del item level según valor
-    local ilvlColor = "|cffffffff" -- Blanco por defecto
-    if charData.itemLevel >= 600 then
-        ilvlColor = "|cffff8000" -- Naranja (legendario)
-    elseif charData.itemLevel >= 550 then
-        ilvlColor = "|cffa335ee" -- Púrpura (épico)
-    elseif charData.itemLevel >= 500 then
-        ilvlColor = "|cff0070dd" -- Azul (raro)
-    elseif charData.itemLevel >= 450 then
-        ilvlColor = "|cff1eff00" -- Verde (poco común)
-    end
+    local ilvlColor = "|cffa335ee"
     
     ilvlValue:SetText(ilvlColor .. charData.itemLevel .. "|r")
     
