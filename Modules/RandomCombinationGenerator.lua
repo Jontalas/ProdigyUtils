@@ -121,6 +121,27 @@ local classColors = {
     ["Guerrero"] = "|cffc69b6d"
 }
 
+-- NUEVO: Colores por rol para especializaciones
+local roleColors = {
+    ["Tanque"] = "|cffff0000",              -- Rojo
+    ["Sanador"] = "|cff00ff00",             -- Verde  
+    ["DPS cuerpo a cuerpo"] = "|cffffff00", -- Amarillo
+    ["DPS a distancia"] = "|cff0080ff"      -- Azul
+}
+
+-- Función para obtener el rol de una especialización
+local function GetSpecRole(className, specName)
+    local classData = classSpecData[className]
+    if classData then
+        for _, spec in ipairs(classData.specs) do
+            if spec.name == specName then
+                return spec.role
+            end
+        end
+    end
+    return "Desconocido"
+end
+
 -- Función para obtener el icono de una especialización
 local function GetSpecIcon(className, specName)
     local classData = classSpecData[className]
@@ -786,7 +807,8 @@ function RandomCombinationGenerator.ShowConfigWindow()
     local description = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", mainTitle, "BOTTOMLEFT", 0, -10)
     description:SetText(
-        "Habilitar o deshabilitar clases afecta la generación, no el estado de sus especializaciones. Peso menor = mayor probabilidad. Puedes usar decimales (ej: 1.5, 2.3). Peso 1 = máxima probabilidad.")
+        "Habilitar o deshabilitar clases afecta la generación, no el estado de sus especializaciones. Peso menor = mayor probabilidad. Puedes usar decimales (ej: 1.5, 2.3). Peso 1 = máxima probabilidad."
+    )
     description:SetTextColor(0.8, 0.8, 0.8)
 
     local yOffset = -60
@@ -1241,6 +1263,7 @@ function RandomCombinationGenerator.ShowSummaryWindow()
                 class = class,
                 classColor = classColors and classColors[class] or "|cffffffff",
                 specName = spec.name,
+                specRole = spec.role, -- NUEVO: Agregar rol de la especialización
                 icon = spec.icon
             })
         end
@@ -1273,10 +1296,11 @@ function RandomCombinationGenerator.ShowSummaryWindow()
             classNameText:SetPoint("LEFT", icon, "RIGHT", 8, 0)
             classNameText:SetText(entry.classColor .. entry.class .. "|r")
 
-            -- Especialización
+            -- MODIFICADO: Especialización con color basado en rol
             local specText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             specText:SetPoint("LEFT", classNameText, "RIGHT", 12, 0)
-            specText:SetText("- " .. entry.specName)
+            local roleColor = roleColors[entry.specRole] or "|cffffffff"
+            specText:SetText("- " .. roleColor .. entry.specName .. "|r")
 
             yOffset = yOffset - 28
         end
