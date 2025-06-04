@@ -7,7 +7,8 @@ local function GetProfileDB()
     ProdigyUtilsDB.consumibles = ProdigyUtilsDB.consumibles or {}
     ProdigyUtilsDB.bandas = ProdigyUtilsDB.bandas or {}
     ProdigyUtilsDB.profundidades = ProdigyUtilsDB.profundidades or {}
-    ProdigyUtilsDB.mazmorras = ProdigyUtilsDB.mazmorras or {}
+    -- Eliminamos el array de mazmorras clásico, solo usamos el de umbrales
+    ProdigyUtilsDB.mazmorras_umbral = ProdigyUtilsDB.mazmorras_umbral or {}
     return ProdigyUtilsDB
 end
 
@@ -67,7 +68,6 @@ local function GetCharacterData()
         classColor = classColor,
         classKey = englishClass,
         specIndex = specIndex,
-        -- Solo usar GetSpecializationInfo si specIndex válido:
         specId = (specIndex ~= nil and specIndex > 0 and select(1, GetSpecializationInfo(specIndex))) or 0
     }
 end
@@ -82,7 +82,6 @@ local function GetConsumiblesForCurrent()
     local key = GetConsKey()
     db.consumibles[key] = db.consumibles[key] or {}
     local tbl = db.consumibles[key]
-    -- Aseguramos que tenga todas las claves
     for _, k in ipairs(CONSUMIBLES_KEYS) do
         if not tbl[k] then tbl[k] = "" end
     end
@@ -122,7 +121,7 @@ local function EditarParesFrame(tablename, displayTitle, parentFrame)
     local lista = db[tablename]
     local f = CreateFrame("Frame", "Editar" .. tablename .. "Frame", parentFrame or UIParent,
         "BasicFrameTemplateWithInset")
-    f:SetSize(400, 400)
+    f:SetSize(400, 420)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -133,7 +132,16 @@ local function EditarParesFrame(tablename, displayTitle, parentFrame)
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     f.title:SetPoint("TOP", 0, -10)
     f.title:SetText("Editar " .. displayTitle)
-    local y = -40
+
+    local headerY = -50
+    local ilvlHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ilvlHeader:SetPoint("TOPLEFT", 16, headerY)
+    ilvlHeader:SetText("|cffFFD700Ilvl|r")
+    local textoHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    textoHeader:SetPoint("TOPLEFT", 70, headerY)
+    textoHeader:SetText("|cffFFD700Texto Recomendación|r")
+
+    local y = headerY - 25
     for i, par in ipairs(lista) do
         local ilvlBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
         ilvlBox:SetSize(40, 20)
@@ -164,6 +172,12 @@ local function EditarParesFrame(tablename, displayTitle, parentFrame)
         end)
         y = y - 28
     end
+
+    local addSeparator = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    addSeparator:SetPoint("TOPLEFT", 16, y - 10)
+    addSeparator:SetText("|cffFFD700Añadir nuevo elemento:|r")
+    y = y - 30
+
     local addIlvl = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
     addIlvl:SetSize(40, 20)
     addIlvl:SetPoint("TOPLEFT", 16, y)
@@ -207,35 +221,65 @@ local function EditarParesFrame(tablename, displayTitle, parentFrame)
 end
 
 ---------------------------
--- MAZMORRAS (TRIOS)
+-- MAZMORRAS (CATEGORÍAS FIJAS, UMBRAL GLOBAL)
 ---------------------------
-local function GetTrios()
+local MAZMORRAS_CATEGORIAS = {
+    { nombre = "Miticas", clave = "miticas" },
+    { nombre = "M+ 6",    clave = "mplus6" },
+    { nombre = "M+ 7",    clave = "mplus7" },
+    { nombre = "M+ 10",   clave = "mplus10" },
+}
+local MAZMORRAS_DB_KEY = "mazmorras_umbral"
+
+local function GetMazmorrasUmbrales()
     local db = GetProfileDB()
-    db.mazmorras = db.mazmorras or {}
-    table.sort(db.mazmorras, function(a, b) return (a.orden or 0) > (b.orden or 0) end)
-    return db.mazmorras
+    db[MAZMORRAS_DB_KEY] = db[MAZMORRAS_DB_KEY] or {
+        miticas = 441,
+        mplus6 = 454,
+        mplus7 = 463,
+        mplus10 = 470,
+    }
+    return db[MAZMORRAS_DB_KEY]
 end
 
-local function PersonajeTieneLogro(achievementId)
-    return achievementId and achievementId > 0 and select(4, GetAchievementInfo(achievementId))
+local function SetMazmorraUmbral(clave, valor)
+    local db = GetProfileDB()
+    db[MAZMORRAS_DB_KEY] = db[MAZMORRAS_DB_KEY] or {}
+    db[MAZMORRAS_DB_KEY][clave] = valor
 end
 
-local function GetMazmorraTexto()
-    local ilvlTexto = "-"
-    for _, trio in ipairs(GetTrios()) do
-        if PersonajeTieneLogro(trio.logro) then
-            ilvlTexto = trio.texto
-            break
+local function GetMinEquippedIlvl()
+    local minIlvl = math.huge
+    for slot = 1, 17 do
+        local itemLink = GetInventoryItemLink("player", slot)
+        if itemLink then
+            local ilvl = C_Item.GetDetailedItemLevelInfo(itemLink)
+            if ilvl and ilvl < minIlvl then
+                minIlvl = ilvl
+            end
         end
     end
-    return ilvlTexto
+    return minIlvl
 end
 
-local function EditarTriosFrame(parentFrame)
-    local db = GetProfileDB()
-    local lista = db.mazmorras
-    local f = CreateFrame("Frame", "EditarTriosFrame", parentFrame or UIParent, "BasicFrameTemplateWithInset")
-    f:SetSize(460, 420)
+local function GetCategoriaMazmorraParaIlvl(ilvl)
+    local umbrales = GetMazmorrasUmbrales()
+    local mejorCategoria = nil
+    local mejorValor = -1
+    for _, cat in ipairs(MAZMORRAS_CATEGORIAS) do
+        local val = tonumber(umbrales[cat.clave] or 0)
+        if ilvl >= val and val > mejorValor then
+            mejorCategoria = cat.nombre
+            mejorValor = val
+        end
+    end
+    return mejorCategoria or "Heroicas"
+end
+
+local function EditarMazmorrasFrame(parentFrame)
+    local umbrales = GetMazmorrasUmbrales()
+    local f = CreateFrame("Frame", "EditarMazmorrasFrame", parentFrame or UIParent, "BasicFrameTemplateWithInset")
+    f:SetSize(400, 300)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -245,86 +289,58 @@ local function EditarTriosFrame(parentFrame)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     f.title:SetPoint("TOP", 0, -10)
-    f.title:SetText("Editar Mazmorras")
-    local y = -40
-    for i, trio in ipairs(lista) do
-        local ordenBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-        ordenBox:SetSize(30, 20)
-        ordenBox:SetPoint("TOPLEFT", 10, y)
-        ordenBox:SetNumber(trio.orden or 0)
-        local textoBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-        textoBox:SetSize(220, 20)
-        textoBox:SetPoint("LEFT", ordenBox, "RIGHT", 8, 0)
-        textoBox:SetText(trio.texto or "")
-        local logroBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-        logroBox:SetSize(70, 20)
-        logroBox:SetPoint("LEFT", textoBox, "RIGHT", 8, 0)
-        logroBox:SetNumber(trio.logro or 0)
-        ordenBox:SetScript("OnEnterPressed", function(self)
-            local num = tonumber(self:GetText()) or 0
-            for j, t in ipairs(lista) do
-                if j ~= i and t.orden == num then
-                    self:SetNumber(trio.orden); return;
-                end
-            end
-            trio.orden = num
-        end)
-        textoBox:SetScript("OnEnterPressed", function(self) trio.texto = self:GetText() end)
-        logroBox:SetScript("OnEnterPressed", function(self) trio.logro = tonumber(self:GetText()) or 0 end)
-        local delBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        delBtn:SetSize(24, 20)
-        delBtn:SetText("X")
-        delBtn:SetPoint("LEFT", logroBox, "RIGHT", 6, 0)
-        delBtn:SetScript("OnClick", function()
-            table.remove(lista, i)
-            f:Hide()
-            EditarTriosFrame(parentFrame)
-        end)
-        y = y - 28
+    f.title:SetText("Configurar Mazmorras")
+
+    -- Cabeceras
+    local headerY = -50
+    local nombreHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nombreHeader:SetPoint("TOPLEFT", 16, headerY)
+    nombreHeader:SetText("|cffFFD700Categoría|r")
+    local umbralHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    umbralHeader:SetPoint("TOPLEFT", 180, headerY)
+    umbralHeader:SetText("|cffFFD700Ilvl mínimo|r")
+
+    -- Edit boxes por categoría
+    local y = headerY - 25
+    local edits = {}
+    for _, cat in ipairs(MAZMORRAS_CATEGORIAS) do
+        local label = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOPLEFT", 16, y)
+        label:SetText(cat.nombre .. ":")
+        local edit = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        edit:SetSize(80, 20)
+        edit:SetPoint("LEFT", label, "LEFT", 170, 0)
+        edit:SetNumber(tonumber(umbrales[cat.clave]) or 0)
+        edits[cat.clave] = edit
+        y = y - 34
     end
-    local addOrden = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-    addOrden:SetSize(30, 20)
-    addOrden:SetPoint("TOPLEFT", 10, y)
-    addOrden:SetNumber(0)
-    local addTexto = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-    addTexto:SetSize(220, 20)
-    addTexto:SetPoint("LEFT", addOrden, "RIGHT", 8, 0)
-    addTexto:SetText("")
-    local addLogro = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-    addLogro:SetSize(70, 20)
-    addLogro:SetPoint("LEFT", addTexto, "RIGHT", 8, 0)
-    addLogro:SetNumber(0)
-    local addBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    addBtn:SetSize(60, 20)
-    addBtn:SetText("Añadir")
-    addBtn:SetPoint("LEFT", addLogro, "RIGHT", 8, 0)
-    addBtn:SetScript("OnClick", function()
-        local num = tonumber(addOrden:GetText()) or 0
-        for _, t in ipairs(lista) do if t.orden == num then return end end
-        table.insert(lista, { orden = num, texto = addTexto:GetText(), logro = tonumber(addLogro:GetText()) or 0 })
+
+    local saveBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    saveBtn:SetSize(90, 22)
+    saveBtn:SetText("Guardar")
+    saveBtn:SetPoint("BOTTOMRIGHT", -16, 12)
+    saveBtn:SetScript("OnClick", function()
+        for _, cat in ipairs(MAZMORRAS_CATEGORIAS) do
+            local val = tonumber(edits[cat.clave]:GetText()) or 0
+            SetMazmorraUmbral(cat.clave, val)
+        end
         f:Hide()
-        EditarTriosFrame(parentFrame)
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
     end)
+
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    closeBtn:SetSize(80, 22)
+    closeBtn:SetSize(90, 22)
     closeBtn:SetText("Cerrar")
-    closeBtn:SetPoint("BOTTOM", 0, 12)
+    closeBtn:SetPoint("BOTTOMLEFT", 16, 12)
     closeBtn:SetScript("OnClick", function()
         f:Hide()
         if parentFrame and CharacterProfile.refreshTabContent then
             CharacterProfile.refreshTabContent(parentFrame)
         end
     end)
-    local saveBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    saveBtn:SetSize(80, 22)
-    saveBtn:SetText("Guardar")
-    saveBtn:SetPoint("BOTTOMRIGHT", -10, 12)
-    saveBtn:SetScript("OnClick", function()
-        f:Hide()
-        if parentFrame and CharacterProfile.refreshTabContent then
-            CharacterProfile.refreshTabContent(parentFrame)
-        end
-    end)
+
     f:Show()
 end
 
@@ -449,7 +465,6 @@ function CharacterProfile.createTabContent()
         local label = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         label:SetPoint("TOPLEFT", 24, y)
         label:SetText(key .. ":")
-        -- Mostrar el valor en un ScrollingMessageFrame con links clickables
         local msgFrame = CreateFrame("ScrollingMessageFrame", nil, infoContainer)
         msgFrame:SetSize(360, 18)
         msgFrame:SetPoint("LEFT", label, "RIGHT", 8, 0)
@@ -481,12 +496,14 @@ function CharacterProfile.createTabContent()
     contTitle:SetText("|cffffcc00Contenido recomendado|r")
     y = y - 22
 
+    -- MAZMORRAS
+    local minIlvl = GetMinEquippedIlvl()
     local mazLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     mazLabel:SetPoint("TOPLEFT", 24, y)
     mazLabel:SetText("Mazmorras:")
     local mazValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     mazValue:SetPoint("LEFT", mazLabel, "RIGHT", 8, 0)
-    mazValue:SetText(GetMazmorraTexto())
+    mazValue:SetText(GetCategoriaMazmorraParaIlvl(minIlvl))
     mazValue:SetJustifyH("LEFT")
     mazValue:SetWidth(320)
     mazValue:SetWordWrap(true)
@@ -494,9 +511,10 @@ function CharacterProfile.createTabContent()
     btnMaz:SetSize(80, 18)
     btnMaz:SetText("Editar")
     btnMaz:SetPoint("LEFT", mazLabel, "LEFT", 390, 0)
-    btnMaz:SetScript("OnClick", function() EditarTriosFrame(frame) end)
+    btnMaz:SetScript("OnClick", function() EditarMazmorrasFrame(frame) end)
     y = y - 22
 
+    -- PROFUNDIDADES
     local profLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     profLabel:SetPoint("TOPLEFT", 24, y)
     profLabel:SetText("Profundidades:")
@@ -513,6 +531,7 @@ function CharacterProfile.createTabContent()
     btnProf:SetScript("OnClick", function() EditarParesFrame("profundidades", "Profundidades", frame) end)
     y = y - 22
 
+    -- BANDAS
     local bandLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     bandLabel:SetPoint("TOPLEFT", 24, y)
     bandLabel:SetText("Bandas:")
