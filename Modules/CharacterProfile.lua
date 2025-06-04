@@ -1,36 +1,48 @@
 -- Módulo Perfil del Personaje
 local CharacterProfile = {}
 
--- Función para obtener información del personaje
+-- Helpers para DB global
+local function GetProfileDB()
+    ProdigyUtilsDB = ProdigyUtilsDB or {}
+    ProdigyUtilsDB.consumibles = ProdigyUtilsDB.consumibles or {}
+    ProdigyUtilsDB.bandas = ProdigyUtilsDB.bandas or {}
+    ProdigyUtilsDB.profundidades = ProdigyUtilsDB.profundidades or {}
+    ProdigyUtilsDB.mazmorras = ProdigyUtilsDB.mazmorras or {}
+    return ProdigyUtilsDB
+end
+
+-- === CLAVE PARA CONSUMIBLES ===
+local function GetConsKey()
+    local _, classKey = UnitClass("player")
+    local specIndex = GetSpecialization and GetSpecialization() or 1
+    local specName = select(2, GetSpecializationInfo(specIndex)) or "UNKNOWN"
+    return string.upper(classKey .. "-" .. specName)
+end
+
+-- === DATOS DEL PERSONAJE ACTUAL ===
 local function GetCharacterData()
     local playerName = UnitName("player") or "Desconocido"
     local playerLevel = UnitLevel("player") or 1
     local playerClass, englishClass = UnitClass("player")
     playerClass = playerClass or "Desconocida"
     local playerRace = UnitRace("player") or "Desconocida"
-    
-    -- Especialización actual
-    local specName = "Sin especialización"
-    local specIcon = 134400 -- Icono por defecto
     local specIndex = GetSpecialization and GetSpecialization()
-    if specIndex and specIndex > 0 then
-        local id, name, description, icon = GetSpecializationInfo(specIndex)
+    local specName = "Sin especialización"
+    local specIcon = 134400
+    if specIndex ~= nil and specIndex > 0 then
+        local id, name, _, icon = GetSpecializationInfo(specIndex)
         if name then
             specName = name
             specIcon = icon
         end
     end
-    
-    -- Item Level promedio (equipado, un decimal)
     local ilvl = 0
     if GetAverageItemLevel then
         ilvl = tonumber(string.format("%.1f", select(2, GetAverageItemLevel())))
     end
-    
-    -- Colores de clase
     local classColors = {
         ["DEATHKNIGHT"] = "|cffc41e3a",
-        ["DEMONHUNTER"] = "|cffa330c9", 
+        ["DEMONHUNTER"] = "|cffa330c9",
         ["DRUID"] = "|cffff7c0a",
         ["EVOKER"] = "|cff33937f",
         ["HUNTER"] = "|cffaad372",
@@ -43,9 +55,7 @@ local function GetCharacterData()
         ["WARLOCK"] = "|cff8788ee",
         ["WARRIOR"] = "|cffc69b6d"
     }
-    
     local classColor = classColors[englishClass] or "|cffffffff"
-    
     return {
         name = playerName,
         level = playerLevel,
@@ -54,153 +64,495 @@ local function GetCharacterData()
         specName = specName,
         specIcon = specIcon,
         itemLevel = ilvl,
-        classColor = classColor
+        classColor = classColor,
+        classKey = englishClass,
+        specIndex = specIndex,
+        -- Solo usar GetSpecializationInfo si specIndex válido:
+        specId = (specIndex ~= nil and specIndex > 0 and select(1, GetSpecializationInfo(specIndex))) or 0
     }
 end
 
--- Función para crear el contenido de la pestaña
+---------------------------
+-- CONSUMIBLES
+---------------------------
+local CONSUMIBLES_KEYS = { "Runa", "Poción", "Comida", "Frasco", "Temporal" }
+
+local function GetConsumiblesForCurrent()
+    local db = GetProfileDB()
+    local key = GetConsKey()
+    db.consumibles[key] = db.consumibles[key] or {}
+    local tbl = db.consumibles[key]
+    -- Aseguramos que tenga todas las claves
+    for _, k in ipairs(CONSUMIBLES_KEYS) do
+        if not tbl[k] then tbl[k] = "" end
+    end
+    return tbl
+end
+
+local function SetConsumible(key, value)
+    local db = GetProfileDB()
+    local consKey = GetConsKey()
+    db.consumibles[consKey][key] = value
+end
+
+---------------------------
+-- BANDAS / PROFUNDIDADES
+---------------------------
+local function GetPares(tablename)
+    local db = GetProfileDB()
+    db[tablename] = db[tablename] or {}
+    table.sort(db[tablename], function(a, b) return (a.ilvl or 0) < (b.ilvl or 0) end)
+    return db[tablename]
+end
+
+local function GetTextoPorIlvl(tablename, ilvl)
+    local lista = GetPares(tablename)
+    local bestTexto, bestIlvl
+    for _, t in ipairs(lista) do
+        if ilvl >= t.ilvl and (not bestIlvl or t.ilvl > bestIlvl) then
+            bestTexto = t.texto
+            bestIlvl = t.ilvl
+        end
+    end
+    return bestTexto or "-"
+end
+
+local function EditarParesFrame(tablename, displayTitle, parentFrame)
+    local db = GetProfileDB()
+    local lista = db[tablename]
+    local f = CreateFrame("Frame", "Editar" .. tablename .. "Frame", parentFrame or UIParent,
+        "BasicFrameTemplateWithInset")
+    f:SetSize(400, 400)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.title:SetPoint("TOP", 0, -10)
+    f.title:SetText("Editar " .. displayTitle)
+    local y = -40
+    for i, par in ipairs(lista) do
+        local ilvlBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        ilvlBox:SetSize(40, 20)
+        ilvlBox:SetPoint("TOPLEFT", 16, y)
+        ilvlBox:SetNumber(par.ilvl)
+        local textoBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        textoBox:SetSize(220, 20)
+        textoBox:SetPoint("LEFT", ilvlBox, "RIGHT", 8, 0)
+        textoBox:SetText(par.texto)
+        ilvlBox:SetScript("OnEnterPressed", function(self)
+            local num = tonumber(self:GetText()) or 0
+            for j, p in ipairs(lista) do
+                if j ~= i and p.ilvl == num then
+                    self:SetNumber(par.ilvl); return;
+                end
+            end
+            par.ilvl = num
+        end)
+        textoBox:SetScript("OnEnterPressed", function(self) par.texto = self:GetText() end)
+        local delBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        delBtn:SetSize(24, 20)
+        delBtn:SetText("X")
+        delBtn:SetPoint("LEFT", textoBox, "RIGHT", 6, 0)
+        delBtn:SetScript("OnClick", function()
+            table.remove(lista, i)
+            f:Hide()
+            EditarParesFrame(tablename, displayTitle, parentFrame)
+        end)
+        y = y - 28
+    end
+    local addIlvl = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    addIlvl:SetSize(40, 20)
+    addIlvl:SetPoint("TOPLEFT", 16, y)
+    addIlvl:SetNumber(0)
+    local addTexto = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    addTexto:SetSize(220, 20)
+    addTexto:SetPoint("LEFT", addIlvl, "RIGHT", 8, 0)
+    addTexto:SetText("")
+    local addBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    addBtn:SetSize(60, 20)
+    addBtn:SetText("Añadir")
+    addBtn:SetPoint("LEFT", addTexto, "RIGHT", 8, 0)
+    addBtn:SetScript("OnClick", function()
+        local num = tonumber(addIlvl:GetText()) or 0
+        for _, p in ipairs(lista) do if p.ilvl == num then return end end
+        table.insert(lista, { ilvl = num, texto = addTexto:GetText() })
+        f:Hide()
+        EditarParesFrame(tablename, displayTitle, parentFrame)
+    end)
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    closeBtn:SetSize(80, 22)
+    closeBtn:SetText("Cerrar")
+    closeBtn:SetPoint("BOTTOM", 0, 12)
+    closeBtn:SetScript("OnClick", function()
+        f:Hide()
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
+    end)
+    local saveBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    saveBtn:SetSize(80, 22)
+    saveBtn:SetText("Guardar")
+    saveBtn:SetPoint("BOTTOMRIGHT", -10, 12)
+    saveBtn:SetScript("OnClick", function()
+        f:Hide()
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
+    end)
+    f:Show()
+end
+
+---------------------------
+-- MAZMORRAS (TRIOS)
+---------------------------
+local function GetTrios()
+    local db = GetProfileDB()
+    db.mazmorras = db.mazmorras or {}
+    table.sort(db.mazmorras, function(a, b) return (a.orden or 0) > (b.orden or 0) end)
+    return db.mazmorras
+end
+
+local function PersonajeTieneLogro(achievementId)
+    return achievementId and achievementId > 0 and select(4, GetAchievementInfo(achievementId))
+end
+
+local function GetMazmorraTexto()
+    local ilvlTexto = "-"
+    for _, trio in ipairs(GetTrios()) do
+        if PersonajeTieneLogro(trio.logro) then
+            ilvlTexto = trio.texto
+            break
+        end
+    end
+    return ilvlTexto
+end
+
+local function EditarTriosFrame(parentFrame)
+    local db = GetProfileDB()
+    local lista = db.mazmorras
+    local f = CreateFrame("Frame", "EditarTriosFrame", parentFrame or UIParent, "BasicFrameTemplateWithInset")
+    f:SetSize(460, 420)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.title:SetPoint("TOP", 0, -10)
+    f.title:SetText("Editar Mazmorras")
+    local y = -40
+    for i, trio in ipairs(lista) do
+        local ordenBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        ordenBox:SetSize(30, 20)
+        ordenBox:SetPoint("TOPLEFT", 10, y)
+        ordenBox:SetNumber(trio.orden or 0)
+        local textoBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        textoBox:SetSize(220, 20)
+        textoBox:SetPoint("LEFT", ordenBox, "RIGHT", 8, 0)
+        textoBox:SetText(trio.texto or "")
+        local logroBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        logroBox:SetSize(70, 20)
+        logroBox:SetPoint("LEFT", textoBox, "RIGHT", 8, 0)
+        logroBox:SetNumber(trio.logro or 0)
+        ordenBox:SetScript("OnEnterPressed", function(self)
+            local num = tonumber(self:GetText()) or 0
+            for j, t in ipairs(lista) do
+                if j ~= i and t.orden == num then
+                    self:SetNumber(trio.orden); return;
+                end
+            end
+            trio.orden = num
+        end)
+        textoBox:SetScript("OnEnterPressed", function(self) trio.texto = self:GetText() end)
+        logroBox:SetScript("OnEnterPressed", function(self) trio.logro = tonumber(self:GetText()) or 0 end)
+        local delBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        delBtn:SetSize(24, 20)
+        delBtn:SetText("X")
+        delBtn:SetPoint("LEFT", logroBox, "RIGHT", 6, 0)
+        delBtn:SetScript("OnClick", function()
+            table.remove(lista, i)
+            f:Hide()
+            EditarTriosFrame(parentFrame)
+        end)
+        y = y - 28
+    end
+    local addOrden = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    addOrden:SetSize(30, 20)
+    addOrden:SetPoint("TOPLEFT", 10, y)
+    addOrden:SetNumber(0)
+    local addTexto = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    addTexto:SetSize(220, 20)
+    addTexto:SetPoint("LEFT", addOrden, "RIGHT", 8, 0)
+    addTexto:SetText("")
+    local addLogro = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    addLogro:SetSize(70, 20)
+    addLogro:SetPoint("LEFT", addTexto, "RIGHT", 8, 0)
+    addLogro:SetNumber(0)
+    local addBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    addBtn:SetSize(60, 20)
+    addBtn:SetText("Añadir")
+    addBtn:SetPoint("LEFT", addLogro, "RIGHT", 8, 0)
+    addBtn:SetScript("OnClick", function()
+        local num = tonumber(addOrden:GetText()) or 0
+        for _, t in ipairs(lista) do if t.orden == num then return end end
+        table.insert(lista, { orden = num, texto = addTexto:GetText(), logro = tonumber(addLogro:GetText()) or 0 })
+        f:Hide()
+        EditarTriosFrame(parentFrame)
+    end)
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    closeBtn:SetSize(80, 22)
+    closeBtn:SetText("Cerrar")
+    closeBtn:SetPoint("BOTTOM", 0, 12)
+    closeBtn:SetScript("OnClick", function()
+        f:Hide()
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
+    end)
+    local saveBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    saveBtn:SetSize(80, 22)
+    saveBtn:SetText("Guardar")
+    saveBtn:SetPoint("BOTTOMRIGHT", -10, 12)
+    saveBtn:SetScript("OnClick", function()
+        f:Hide()
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
+    end)
+    f:Show()
+end
+
+---------------------------
+-- EDICIÓN DE CONSUMIBLES
+---------------------------
+local EditBoxEnFoco = nil
+hooksecurefunc("ChatEdit_InsertLink", function(link)
+    if EditBoxEnFoco and EditBoxEnFoco:HasFocus() then
+        EditBoxEnFoco:Insert(link)
+        return true
+    end
+end)
+
+local function EditarConsumiblesFrame(parentFrame)
+    local tbl = GetConsumiblesForCurrent()
+    local f = CreateFrame("Frame", "EditarConsFrame", parentFrame or UIParent, "BasicFrameTemplateWithInset")
+    f:SetSize(400, 340)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.title:SetPoint("TOP", 0, -10)
+    f.title:SetText("Editar consumibles")
+    local y = -40
+    local boxes = {}
+    for _, key in ipairs(CONSUMIBLES_KEYS) do
+        local label = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOPLEFT", 16, y)
+        label:SetText(key .. ":")
+        local edit = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        edit:SetSize(270, 20)
+        edit:SetPoint("LEFT", label, "RIGHT", 10, 0)
+        edit:SetText(tbl[key])
+        edit:SetAutoFocus(false)
+        edit:SetScript("OnEditFocusGained", function(self) EditBoxEnFoco = self end)
+        edit:SetScript("OnEditFocusLost", function(self) if EditBoxEnFoco == self then EditBoxEnFoco = nil end end)
+        boxes[key] = edit
+        y = y - 34
+    end
+    local saveBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    saveBtn:SetSize(90, 22)
+    saveBtn:SetText("Guardar")
+    saveBtn:SetPoint("BOTTOMRIGHT", -16, 12)
+    saveBtn:SetScript("OnClick", function()
+        for _, key in ipairs(CONSUMIBLES_KEYS) do
+            SetConsumible(key, boxes[key]:GetText())
+        end
+        f:Hide()
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
+    end)
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    closeBtn:SetSize(90, 22)
+    closeBtn:SetText("Cerrar")
+    closeBtn:SetPoint("BOTTOMLEFT", 16, 12)
+    closeBtn:SetScript("OnClick", function()
+        f:Hide()
+        if parentFrame and CharacterProfile.refreshTabContent then
+            CharacterProfile.refreshTabContent(parentFrame)
+        end
+    end)
+    f:Show()
+end
+
+---------------------------
+-- VISUALIZACIÓN PESTAÑA
+---------------------------
 function CharacterProfile.createTabContent()
     local frame = CreateFrame("Frame")
-    frame:SetSize(560, 400)
-    
-    -- Obtener datos del personaje
+    frame:SetSize(560, 500)
     local charData = GetCharacterData()
-    
-    -- CONTENEDOR PRINCIPAL
     local mainContainer = CreateFrame("Frame", nil, frame)
-    mainContainer:SetSize(560, 400)
+    mainContainer:SetSize(560, 500)
     mainContainer:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    
-    -- Título principal
     local title = mainContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", 0, -20)
+    title:SetPoint("TOP", 0, -40)
     title:SetText("Perfil del Personaje")
     title:SetTextColor(1, 0.82, 0)
-    
-    -- FRAME PRINCIPAL DE INFORMACIÓN
     local infoFrame = CreateFrame("Frame", nil, mainContainer, "InsetFrameTemplate")
     infoFrame:SetPoint("TOP", title, "BOTTOM", 0, -20)
-    infoFrame:SetSize(520, 320)
-
-    -- Retrato 2D del personaje en la esquina superior derecha
+    infoFrame:SetSize(520, 380)
     local portrait = infoFrame:CreateTexture(nil, "BACKGROUND")
     portrait:SetSize(64, 64)
     portrait:SetPoint("TOPRIGHT", infoFrame, "TOPRIGHT", -12, -12)
     SetPortraitTexture(portrait, "player")
-    
-    -- CONTENEDOR DE INFORMACIÓN CENTRADO
     local infoContainer = CreateFrame("Frame", nil, infoFrame)
-    infoContainer:SetSize(480, 280)
-    infoContainer:SetPoint("CENTER", infoFrame, "CENTER", 0, 0)
-    
-    -- === SECCIÓN SUPERIOR: NOMBRE Y NIVEL ===
+    infoContainer:SetSize(480, 380)
+    infoContainer:SetPoint("TOPLEFT", infoFrame, "TOPLEFT", 10, -10)
+    local y = -10
     local nameText = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    nameText:SetPoint("TOP", infoContainer, "TOP", 0, -20)
+    nameText:SetPoint("TOPLEFT", 10, y)
     nameText:SetText(charData.classColor .. charData.name .. "|r")
-    
+    y = y - 28
     local levelText = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    levelText:SetPoint("TOP", nameText, "BOTTOM", 0, -10)
-    levelText:SetText("Nivel " .. charData.level)
-    levelText:SetTextColor(1, 1, 1)
-    
-    -- === SECCIÓN CENTRAL: INFORMACIÓN BÁSICA ===
-    local yOffset = -80
-    
-    -- Clase
-    local classLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    classLabel:SetPoint("TOPLEFT", infoContainer, "TOPLEFT", 40, yOffset)
-    classLabel:SetText("|cffffcc00Clase:|r")
-    
-    local classValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    classValue:SetPoint("LEFT", classLabel, "RIGHT", 10, 0)
-    classValue:SetText(charData.classColor .. charData.class .. "|r")
-    
-    yOffset = yOffset - 25
-    
-    -- Raza
-    local raceLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    raceLabel:SetPoint("TOPLEFT", infoContainer, "TOPLEFT", 40, yOffset)
-    raceLabel:SetText("|cffffcc00Raza:|r")
-    
-    local raceValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    raceValue:SetPoint("LEFT", raceLabel, "RIGHT", 10, 0)
-    raceValue:SetText(charData.race)
-    
-    yOffset = yOffset - 35
-    
-    -- === ESPECIALIZACIÓN CON ICONO ===
-    local specLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    specLabel:SetPoint("TOPLEFT", infoContainer, "TOPLEFT", 40, yOffset)
-    specLabel:SetText("|cffffcc00Especialización:|r")
-    
-    -- Icono de especialización
-    local specIcon = infoContainer:CreateTexture(nil, "ARTWORK")
-    specIcon:SetSize(24, 24)
-    specIcon:SetPoint("LEFT", specLabel, "RIGHT", 10, 0)
-    specIcon:SetTexture(charData.specIcon)
-    
-    -- Nombre de especialización
-    local specValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    specValue:SetPoint("LEFT", specIcon, "RIGHT", 8, 0)
-    specValue:SetText(charData.specName)
-    
-    yOffset = yOffset - 35
-    
-    -- === ITEM LEVEL ===
-    local ilvlLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ilvlLabel:SetPoint("TOPLEFT", infoContainer, "TOPLEFT", 40, yOffset)
-    ilvlLabel:SetText("|cffffcc00Item Level:|r")
-    
-    local ilvlValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    ilvlValue:SetPoint("LEFT", ilvlLabel, "RIGHT", 10, 0)
-    
-    -- Color del item level según valor
-    local ilvlColor = "|cffa335ee"
-    
-    ilvlValue:SetText(ilvlColor .. charData.itemLevel .. "|r")
-    
-    -- === SECCIÓN INFERIOR: ESPACIO PARA FUTURAS EXPANSIONES ===
-    yOffset = yOffset - 50
-    
-    local futureLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    futureLabel:SetPoint("TOP", infoContainer, "BOTTOM", 0, yOffset)
-    futureLabel:SetText("|cff888888--- Más información será añadida aquí ------|r")
-    
-    -- === BOTÓN DE ACTUALIZAR (OPCIONAL) ===
+    levelText:SetPoint("TOPLEFT", 10, y)
+    levelText:SetText("Nivel " .. charData.level ..
+        " " .. charData.race .. " - " .. charData.class .. " (" .. charData.specName .. ")")
+    y = y - 28
+    local ilvlText = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    ilvlText:SetPoint("TOPLEFT", 10, y)
+    ilvlText:SetText("Ilvl: |cffffff00" .. charData.itemLevel .. "|r")
+    y = y - 20
+
+    -- === SECCIÓN CONSUMIBLES ===
+    local consTitle = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    consTitle:SetPoint("TOPLEFT", 10, y)
+    consTitle:SetText("|cffffcc00Consumibles recomendados|r")
+    local editConsBtn = CreateFrame("Button", nil, infoContainer, "UIPanelButtonTemplate")
+    editConsBtn:SetSize(130, 20)
+    editConsBtn:SetText("Editar consumibles")
+    editConsBtn:SetPoint("TOPLEFT", 200, y + 4)
+    editConsBtn:SetScript("OnClick", function() EditarConsumiblesFrame(frame) end)
+    y = y - 22
+    local consumibles = GetConsumiblesForCurrent()
+    for _, key in ipairs(CONSUMIBLES_KEYS) do
+        local label = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetPoint("TOPLEFT", 24, y)
+        label:SetText(key .. ":")
+        -- Mostrar el valor en un ScrollingMessageFrame con links clickables
+        local msgFrame = CreateFrame("ScrollingMessageFrame", nil, infoContainer)
+        msgFrame:SetSize(360, 18)
+        msgFrame:SetPoint("LEFT", label, "RIGHT", 8, 0)
+        msgFrame:SetFontObject(GameFontHighlightSmall)
+        msgFrame:SetJustifyH("LEFT")
+        msgFrame:SetFading(false)
+        msgFrame:SetMaxLines(1)
+        msgFrame:SetHyperlinksEnabled(true)
+        msgFrame:Clear()
+        msgFrame:AddMessage(consumibles[key] or "")
+        msgFrame:SetScript("OnHyperlinkEnter", function(self, linkData, link, button)
+            GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+            GameTooltip:SetHyperlink(link)
+            GameTooltip:Show()
+        end)
+        msgFrame:SetScript("OnHyperlinkLeave", function() GameTooltip:Hide() end)
+        msgFrame:SetScript("OnHyperlinkClick", function(self, linkData, link, button)
+            if IsShiftKeyDown() then
+                ChatEdit_InsertLink(link)
+            end
+        end)
+        y = y - 20
+    end
+    y = y - 14
+
+    -- === SECCIÓN CONTENIDO RECOMENDADO ===
+    local contTitle = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    contTitle:SetPoint("TOPLEFT", 10, y)
+    contTitle:SetText("|cffffcc00Contenido recomendado|r")
+    y = y - 22
+
+    local mazLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mazLabel:SetPoint("TOPLEFT", 24, y)
+    mazLabel:SetText("Mazmorras:")
+    local mazValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    mazValue:SetPoint("LEFT", mazLabel, "RIGHT", 8, 0)
+    mazValue:SetText(GetMazmorraTexto())
+    mazValue:SetJustifyH("LEFT")
+    mazValue:SetWidth(320)
+    mazValue:SetWordWrap(true)
+    local btnMaz = CreateFrame("Button", nil, infoContainer, "UIPanelButtonTemplate")
+    btnMaz:SetSize(80, 18)
+    btnMaz:SetText("Editar")
+    btnMaz:SetPoint("LEFT", mazLabel, "LEFT", 390, 0)
+    btnMaz:SetScript("OnClick", function() EditarTriosFrame(frame) end)
+    y = y - 22
+
+    local profLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    profLabel:SetPoint("TOPLEFT", 24, y)
+    profLabel:SetText("Profundidades:")
+    local profValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    profValue:SetPoint("LEFT", profLabel, "RIGHT", 8, 0)
+    profValue:SetText(GetTextoPorIlvl("profundidades", charData.itemLevel))
+    profValue:SetJustifyH("LEFT")
+    profValue:SetWidth(320)
+    profValue:SetWordWrap(true)
+    local btnProf = CreateFrame("Button", nil, infoContainer, "UIPanelButtonTemplate")
+    btnProf:SetSize(80, 18)
+    btnProf:SetText("Editar")
+    btnProf:SetPoint("LEFT", profLabel, "LEFT", 390, 0)
+    btnProf:SetScript("OnClick", function() EditarParesFrame("profundidades", "Profundidades", frame) end)
+    y = y - 22
+
+    local bandLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bandLabel:SetPoint("TOPLEFT", 24, y)
+    bandLabel:SetText("Bandas:")
+    local bandValue = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bandValue:SetPoint("LEFT", bandLabel, "RIGHT", 8, 0)
+    bandValue:SetText(GetTextoPorIlvl("bandas", charData.itemLevel))
+    bandValue:SetJustifyH("LEFT")
+    bandValue:SetWidth(320)
+    bandValue:SetWordWrap(true)
+    local btnBand = CreateFrame("Button", nil, infoContainer, "UIPanelButtonTemplate")
+    btnBand:SetSize(80, 18)
+    btnBand:SetText("Editar")
+    btnBand:SetPoint("LEFT", bandLabel, "LEFT", 390, 0)
+    btnBand:SetScript("OnClick", function() EditarParesFrame("bandas", "Bandas", frame) end)
+
     local refreshButton = CreateFrame("Button", nil, infoFrame, "UIPanelButtonTemplate")
     refreshButton:SetSize(120, 25)
     refreshButton:SetPoint("BOTTOMRIGHT", infoFrame, "BOTTOMRIGHT", -10, 10)
     refreshButton:SetText("Actualizar")
     refreshButton:SetScript("OnClick", function()
-        -- Recrear el contenido para refrescar datos
         CharacterProfile.refreshTabContent(frame:GetParent())
     end)
-    
     return frame
 end
 
--- Función para refrescar el contenido de la pestaña
 function CharacterProfile.refreshTabContent(container)
-    -- Limpiar contenido anterior
-    for _, child in pairs({container:GetChildren()}) do
+    for _, child in pairs({ container:GetChildren() }) do
         if child ~= container then
             child:Hide()
             child:SetParent(nil)
         end
     end
-    
-    -- Crear nuevo contenido actualizado
     local newFrame = CharacterProfile.createTabContent()
     newFrame:SetParent(container)
     newFrame:SetAllPoints(container)
     newFrame:Show()
 end
 
--- Registrar el módulo
 ProdigyUtils:RegisterModule("characterProfile", {
-    displayName = function() 
-        return UnitName("player") or "Personaje"
-    end,
+    displayName = function() return UnitName("player") or "Personaje" end,
     createTabContent = CharacterProfile.createTabContent,
     refreshTabContent = CharacterProfile.refreshTabContent
 })
