@@ -124,7 +124,7 @@ local classColors = {
 -- NUEVO: Colores por rol para especializaciones
 local roleColors = {
     ["Tanque"] = "|cffff0000",              -- Rojo
-    ["Sanador"] = "|cff00ff00",             -- Verde  
+    ["Sanador"] = "|cff00ff00",             -- Verde
     ["DPS cuerpo a cuerpo"] = "|cffffff00", -- Amarillo
     ["DPS a distancia"] = "|cff0080ff"      -- Azul
 }
@@ -944,6 +944,31 @@ function RandomCombinationGenerator.ShowConfigWindow()
             weightEditBox:SetNumeric(false)
             weightEditBox:SetMaxLetters(6)
             controls[specKey].weightEditBox = weightEditBox
+
+            weightEditBox:SetScript("OnEditFocusLost", function(self)
+                local newWeight = tonumber(self:GetText())
+                if newWeight and newWeight > 0 then
+                    pendingChanges[specKey] = pendingChanges[specKey] or {}
+                    pendingChanges[specKey].weight = newWeight
+                    hasUnsavedChanges = true
+                else
+                    -- Si el valor no es válido, restaurar el valor original
+                    self:SetText(tostring(specConfig.weight))
+                end
+            end)
+
+            weightEditBox:SetScript("OnEnterPressed", function(self)
+                local newWeight = tonumber(self:GetText())
+                if newWeight and newWeight > 0 then
+                    pendingChanges[specKey] = pendingChanges[specKey] or {}
+                    pendingChanges[specKey].weight = newWeight
+                    hasUnsavedChanges = true
+                    self:ClearFocus()
+                else
+                    -- Si el valor no es válido, restaurar el valor original
+                    self:SetText(tostring(specConfig.weight))
+                end
+            end)
 
             -- Etiqueta "Peso:"
             local weightLabel = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
