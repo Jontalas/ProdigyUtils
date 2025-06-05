@@ -248,18 +248,25 @@ local function SetMazmorraUmbral(clave, valor)
     db[MAZMORRAS_DB_KEY][clave] = valor
 end
 
-local function GetMinEquippedIlvl()
-    local minIlvl = math.huge
+local function GetFifthLowestEquippedIlvl()
+    local ilvls = {}
     for slot = 1, 17 do
         local itemLink = GetInventoryItemLink("player", slot)
         if itemLink then
             local ilvl = C_Item.GetDetailedItemLevelInfo(itemLink)
-            if ilvl and ilvl < minIlvl then
-                minIlvl = ilvl
+            if ilvl then
+                table.insert(ilvls, ilvl)
             end
         end
     end
-    return minIlvl
+    table.sort(ilvls)
+    if #ilvls >= 5 then
+        return ilvls[5]
+    elseif #ilvls > 0 then
+        return ilvls[#ilvls]
+    else
+        return 0
+    end
 end
 
 local function GetCategoriaMazmorraParaIlvl(ilvl)
@@ -497,7 +504,7 @@ function CharacterProfile.createTabContent()
     y = y - 22
 
     -- MAZMORRAS
-    local minIlvl = GetMinEquippedIlvl()
+    local minIlvl = GetFifthLowestEquippedIlvl()
     local mazLabel = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     mazLabel:SetPoint("TOPLEFT", 24, y)
     mazLabel:SetText("Mazmorras:")
