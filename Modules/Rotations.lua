@@ -18,6 +18,10 @@ local function EnsureDB()
     if not ProdigyUtilsDB.rotations then ProdigyUtilsDB.rotations = {} end
 end
 
+-- NUEVO: Variables para controlar el seguimiento de hechizos enviados
+local lastSentSpellID = nil
+local canRegisterSpell = false
+
 function Rotations.UpdateLoadouts()
     EnsureDB()
     local db = ProdigyUtilsDB.rotations
@@ -274,24 +278,49 @@ function Rotations.OnLoad()
 
     if not Rotations.eventFrame then
         local f = CreateFrame("Frame")
+        -- MODIFICADO: Registrar ambos eventos
         f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        f:SetScript("OnEvent", function()
-            if not UnitAffectingCombat("player") then return end
-            local _, event, _, sourceGUID, _, _, _, _, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo()
-            if event == "SPELL_CAST_SUCCESS" and sourceGUID == UnitGUID("player") then
-                EnsureDB()
-                local playerKey = GetPlayerKey()
-                local specID = SafeGetCurrentSpecID()
-                if not specID then return end
-                local loadoutID = (C_ClassTalents and C_ClassTalents.GetLastSelectedSavedConfigID and C_ClassTalents.GetLastSelectedSavedConfigID(specID)) or
-                    nil
-                if not loadoutID then return end
-                if not (ProdigyUtilsDB.rotations and ProdigyUtilsDB.rotations[playerKey] and ProdigyUtilsDB.rotations[playerKey][specID] and ProdigyUtilsDB.rotations[playerKey][specID][loadoutID]) then
-                    Rotations.UpdateLoadouts()
+        f:RegisterEvent("UNIT_SPELLCAST_SENT")
+        
+        f:SetScript("OnEvent", function(self, event, ...)
+            -- NUEVO: Manejar evento UNIT_SPELLCAST_SENT
+            if event == "UNIT_SPELLCAST_SENT" then
+                local unit, target, castGUID, spellID = ...
+                if unit == "player" then
+                    -- Anotar el último hechizo enviado y habilitar el registro
+                    lastSentSpellID = spellID
+                    canRegisterSpell = true
                 end
-                local abilities = ProdigyUtilsDB.rotations[playerKey][specID][loadoutID].abilities
-                abilities[spellID] = abilities[spellID] or { name = spellName, count = 0 }
-                abilities[spellID].count = abilities[spellID].count + 1
+                return
+            end
+            
+            -- MODIFICADO: Lógica existente para COMBAT_LOG_EVENT_UNFILTERED
+            if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+                if not UnitAffectingCombat("player") then return end
+                local _, combatEvent, _, sourceGUID, _, _, _, _, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo()
+                
+                if combatEvent == "SPELL_CAST_SUCCESS" and sourceGUID == UnitGUID("player") then
+                    -- NUEVO: Verificar que el hechizo coincide con el último enviado y que se puede registrar
+                    if not canRegisterSpell or not lastSentSpellID or spellID ~= lastSentSpellID then
+                        return
+                    end
+                    
+                    -- NUEVO: Marcar que ya se registró este hechizo para evitar duplicados
+                    canRegisterSpell = false
+                    
+                    EnsureDB()
+                    local playerKey = GetPlayerKey()
+                    local specID = SafeGetCurrentSpecID()
+                    if not specID then return end
+                    local loadoutID = (C_ClassTalents and C_ClassTalents.GetLastSelectedSavedConfigID and C_ClassTalents.GetLastSelectedSavedConfigID(specID)) or nil
+                    if not loadoutID then return end
+                    if not (ProdigyUtilsDB.rotations and ProdigyUtilsDB.rotations[playerKey] and ProdigyUtilsDB.rotations[playerKey][specID] and ProdigyUtilsDB.rotations[playerKey][specID][loadoutID]) then
+                        Rotations.UpdateLoadouts()
+                    end
+                    local abilities = ProdigyUtilsDB.rotations[playerKey][specID][loadoutID].abilities
+                    abilities[spellID] = abilities[spellID] or { name = spellName, count = 0 }
+                    abilities[spellID].count = abilities[spellID].count + 1
+                end
             end
         end)
         Rotations.eventFrame = f
